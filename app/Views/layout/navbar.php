@@ -1,4 +1,5 @@
 <nav class="navbar">
+    <?php $displayName = session('nama_lengkap') ?: (session('username') ?: 'Admin'); ?>
     <div class="logo">
         <img src="<?= base_url('') ?>" alt="">
         <span class="title-nav">
@@ -16,7 +17,8 @@
             <div class="profil-img">
                 <img src="" alt="">
             </div>
-            <p>arifin</p>
+            <p><?= esc($displayName) ?></p>
+            <a class="logout-link" href="<?= site_url('logout') ?>">Logout</a>
         </li>
     </div>
 </nav>
