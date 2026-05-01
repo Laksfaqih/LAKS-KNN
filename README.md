@@ -1,3 +1,33 @@
+# Sistem Klasifikasi Kelayakan Lahan (CodeIgniter 4)
+
+## Setup Fase 1 (Database)
+
+1. Salin environment file:
+   ```bash
+   cp .env.example .env
+   ```
+2. Sesuaikan kredensial database di `.env`:
+   - `database.default.hostname`
+   - `database.default.database`
+   - `database.default.username`
+   - `database.default.password`
+3. Jalankan migrasi schema:
+   ```bash
+   php spark migrate
+   ```
+4. Seed admin default:
+   ```bash
+   php spark db:seed DatabaseSeeder
+   ```
+
+Kredensial admin default:
+- Username: `admin`
+- Password: `admin123`
+
+Alternatif tanpa migration: gunakan file [sql/schema.sql](sql/schema.sql).
+
+---
+
 # CodeIgniter 4 Application Starter
 
 ## What is CodeIgniter?

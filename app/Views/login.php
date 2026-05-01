@@ -15,25 +15,29 @@
             <section class="form">
                 <div class="title">
                     <h1>welcome back!</h1>
-                    <p>enter your cridentials to access your account</p>
+                    <p>enter your credentials to access your account</p>
                 </div>
-                <form class="form-wrapper" action="">
+
+                <?php if (session()->getFlashdata('error')): ?>
+                    <div class="alert alert-error"><?= esc(session()->getFlashdata('error')) ?></div>
+                <?php endif; ?>
+
+                <?php if (session()->getFlashdata('success')): ?>
+                    <div class="alert alert-success"><?= esc(session()->getFlashdata('success')) ?></div>
+                <?php endif; ?>
+
+                <form class="form-wrapper" action="<?= site_url('login/auth') ?>" method="post">
                     <div class="group-input">
-                        <label for="">username</label>
-                        <input type="text">
+                        <label for="username">username</label>
+                        <input id="username" name="username" type="text" value="<?= esc(old('username')) ?>" required>
                     </div>
                     <div class="group-input">
                         <span>
-                            <label for="">Password</label>
-                            <a href="">forgot password</a>
+                            <label for="password">Password</label>
                         </span>
-                        <input type="text">
+                        <input id="password" name="password" type="password" required>
                     </div>
-                    <div class="ceckbox">
-                        <input type="checkbox">
-                        <label for="">remember me</label>
-                    </div>
-                    <button class="btn">Login</button>
+                    <button class="btn" type="submit">Login</button>
                 </form>
             </section>
             <section class="card-logo">
