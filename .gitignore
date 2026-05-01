@@ -124,3 +124,14 @@ _modules/*
 
 /results/
 /phpunit*.xml
+
+#-------------------------
+# Large Assets & Libraries
+#-------------------------
+
+# FontAwesome (use CDN instead)
+public/fontawesome/
+
+# Large media files (compress or use cloud storage)
+# public/assets/*.png
+# public/assets/*.jpg
