@@ -1,100 +1,222 @@
-# Sistem Klasifikasi Kelayakan Lahan (CodeIgniter 4)
+# Sistem Klasifikasi Kelayakan Lahan
 
-## Setup Fase 1 (Database)
+Aplikasi web berbasis `CodeIgniter 4` untuk klasifikasi kelayakan lahan pertanian menggunakan `KNN` dan visualisasi peta.
 
-1. Salin environment file:
-   ```bash
-   cp .env.example .env
-   ```
-2. Sesuaikan kredensial database di `.env`:
-   - `database.default.hostname`
-   - `database.default.database`
-   - `database.default.username`
-   - `database.default.password`
-3. Jalankan migrasi schema:
-   ```bash
-   php spark migrate
-   ```
-4. Seed admin default:
-   ```bash
-   php spark db:seed DatabaseSeeder
-   ```
+## Fitur Utama
 
-Kredensial admin default:
+- Login admin
+- Master `Kriteria/Komoditas`
+- Master `Nilai Kriteria`
+- Manajemen `Data Latih`
+- Import dan export `Data Latih` CSV
+- Klasifikasi lahan berbasis `KNN`
+- Input area lahan menggunakan poligon pada peta
+- Mapping hasil rekomendasi komoditas
+- Dashboard statistik dan riwayat klasifikasi
+
+## Kebutuhan Sistem
+
+- PHP `>= 8.2`
+- Composer
+- MySQL / MariaDB
+- Ekstensi PHP:
+  - `intl`
+  - `mbstring`
+  - `json`
+  - `mysqli` / `mysqlnd`
+
+## Instalasi
+
+1. Clone repository lalu masuk ke folder project
+
+```bash
+git clone <url-repository> kalasifikasi
+cd kalasifikasi
+```
+
+2. Install dependency PHP
+
+```bash
+composer install
+```
+
+3. Siapkan file environment
+
+```bash
+cp env .env
+```
+
+4. Edit file `.env`, lalu sesuaikan minimal bagian berikut:
+
+```ini
+CI_ENVIRONMENT = development
+
+app.baseURL = 'http://localhost:8080/'
+
+database.default.hostname = localhost
+database.default.database = klasifikasi_lahan
+database.default.username = root
+database.default.password =
+database.default.DBDriver = MySQLi
+database.default.port = 3306
+```
+
+5. Buat database baru di MySQL
+
+```sql
+CREATE DATABASE klasifikasi_lahan;
+```
+
+6. Jalankan migration
+
+```bash
+php spark migrate
+```
+
+7. Seed data admin default
+
+```bash
+php spark db:seed DatabaseSeeder
+```
+
+8. Jalankan server development
+
+```bash
+php spark serve
+```
+
+9. Buka aplikasi di browser
+
+```text
+http://localhost:8080
+```
+
+## Login Default
+
 - Username: `admin`
 - Password: `admin123`
 
-Alternatif tanpa migration: gunakan file [sql/schema.sql](sql/schema.sql).
+Segera ganti password admin setelah instalasi pertama jika aplikasi akan dipakai di lingkungan nyata.
 
----
+## Menjalankan Ulang Database Dari Nol
 
-# CodeIgniter 4 Application Starter
+Jika ingin reset database lokal:
 
-## What is CodeIgniter?
+```bash
+php spark migrate:refresh
+php spark db:seed DatabaseSeeder
+```
 
-CodeIgniter is a PHP full-stack web framework that is light, fast, flexible and secure.
-More information can be found at the [official site](https://codeigniter.com).
+Catatan:
+- `migrate:refresh` akan menghapus seluruh tabel hasil migration lalu membuat ulang dari awal.
+- Jangan jalankan ini di database produksi tanpa backup.
 
-This repository holds a composer-installable app starter.
-It has been built from the
-[development repository](https://github.com/codeigniter4/CodeIgniter4).
+## Struktur Data Awal
 
-More information about the plans for version 4 can be found in [CodeIgniter 4](https://forum.codeigniter.com/forumdisplay.php?fid=28) on the forums.
+Setelah migration berjalan, aplikasi akan menyiapkan struktur utama berikut:
 
-You can read the [user guide](https://codeigniter.com/user_guide/)
-corresponding to the latest version of the framework.
+- `users`
+- `data_latih`
+- `data_uji`
+- `hasil_klasifikasi`
+- `komoditas`
+- `nilai_kriteria`
+- `data_latih_komoditas`
+- `hasil_klasifikasi_detail`
 
-## Installation & updates
+Migration juga akan menambahkan komoditas awal:
 
-`composer create-project codeigniter4/appstarter` then `composer update` whenever
-there is a new release of the framework.
+- `Tebu`
+- `Jagung`
+- `Cabe`
+- `Padi`
 
-When updating, check the release notes to see if there are any changes you might need to apply
-to your `app` folder. The affected files can be copied or merged from
-`vendor/codeigniter4/framework/app`.
+## Import CSV Data Latih
 
-## Setup
+Import CSV dilakukan dari halaman `Data Latih`.
 
-Copy `env` to `.env` and tailor for your app, specifically the baseURL
-and any database settings.
+Format header CSV mengikuti komoditas aktif pada sistem. Contoh umum:
 
-## Important Change with index.php
+```csv
+kemiringan_lereng,luas_lahan,ph_tanah,jenis_tanah,ketinggian_tempat,kedalaman_tanah,curah_hujan,kelas_tebu,kelas_jagung,kelas_cabe,kelas_padi
+```
 
-`index.php` is no longer in the root of the project! It has been moved inside the *public* folder,
-for better security and separation of components.
+Gunakan fitur `Export CSV` di halaman `Data Latih` untuk mendapatkan template paling aman sesuai kondisi master komoditas saat ini.
 
-This means that you should configure your web server to "point" to your project's *public* folder, and
-not to the project root. A better practice would be to configure a virtual host to point there. A poor practice would be to point your web server to the project root and expect to enter *public/...*, as the rest of your logic and the
-framework are exposed.
+## Alternatif Import SQL Lama
 
-**Please** read the user guide for a better explanation of how CI4 works!
+Repository ini masih memiliki file `sql/schema.sql`, tetapi untuk kondisi aplikasi terbaru disarankan memakai:
 
-## Repository Management
+```bash
+php spark migrate
+php spark db:seed DatabaseSeeder
+```
 
-We use GitHub issues, in our main repository, to track **BUGS** and to track approved **DEVELOPMENT** work packages.
-We use our [forum](http://forum.codeigniter.com) to provide SUPPORT and to discuss
-FEATURE REQUESTS.
+Alasannya:
+- migration mencakup struktur terbaru aplikasi
+- schema lama belum tentu memuat seluruh perubahan fase terbaru
 
-This repository is a "distribution" one, built by our release preparation script.
-Problems with it can be raised on our forum, or as issues in the main repository.
+## Perintah Berguna
 
-## Server Requirements
+Menjalankan server:
 
-PHP version 8.2 or higher is required, with the following extensions installed:
+```bash
+php spark serve
+```
 
-- [intl](http://php.net/manual/en/intl.requirements.php)
-- [mbstring](http://php.net/manual/en/mbstring.installation.php)
+Melihat daftar route:
 
-> [!WARNING]
-> - The end of life date for PHP 7.4 was November 28, 2022.
-> - The end of life date for PHP 8.0 was November 26, 2023.
-> - The end of life date for PHP 8.1 was December 31, 2025.
-> - If you are still using below PHP 8.2, you should upgrade immediately.
-> - The end of life date for PHP 8.2 will be December 31, 2026.
+```bash
+php spark routes
+```
 
-Additionally, make sure that the following extensions are enabled in your PHP:
+Cek syntax PHP file tertentu:
 
-- json (enabled by default - don't turn it off)
-- [mysqlnd](http://php.net/manual/en/mysqlnd.install.php) if you plan to use MySQL
-- [libcurl](http://php.net/manual/en/curl.requirements.php) if you plan to use the HTTP\CURLRequest library
-# alfin
+```bash
+php -l app/Controllers/Klasifikasi.php
+```
+
+Menjalankan test:
+
+```bash
+composer test
+```
+
+## Troubleshooting
+
+`Database tidak terkoneksi`
+- pastikan MySQL aktif
+- periksa isi `.env`
+- pastikan database `klasifikasi_lahan` sudah dibuat
+
+`php spark migrate` gagal
+- pastikan credential DB benar
+- pastikan user MySQL punya izin membuat/mengubah tabel
+- pastikan versi PHP minimal `8.2`
+
+`Halaman CSS/asset tidak tampil`
+- pastikan `app.baseURL` di `.env` sesuai URL akses
+- jika pakai server selain `php spark serve`, arahkan document root ke folder `public`
+
+`Login gagal`
+- jalankan ulang seed admin:
+
+```bash
+php spark db:seed DatabaseSeeder
+```
+
+## Catatan Deployment
+
+- arahkan web server ke folder `public`
+- gunakan `CI_ENVIRONMENT = production` di server produksi
+- nonaktifkan debug di produksi
+- ganti password admin default
+- backup database sebelum migration lanjutan
+
+## Stack
+
+- `CodeIgniter 4`
+- `PHP 8.2+`
+- `MySQL`
+- `Leaflet`
+- `Chart.js`

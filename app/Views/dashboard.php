@@ -7,11 +7,11 @@
     <title><?= $title ?></title>
     <link rel="stylesheet" href="<?= base_url('css/style.css') ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <?= $this->renderSection('styles') ?>
 </head>
 
 <body>
     <div class="dashboard">
-        <?= $this->include('layout/navbar.php') ?>
         <div class="main-content">
             <?= $this->include('layout/sidebar.php') ?>
             <main class="content">
@@ -20,6 +20,7 @@
             <?= $this->include('layout/footer.php') ?>
         </div>
     </div>
+    <?= $this->renderSection('scripts') ?>
 </body>
 
 </html>
