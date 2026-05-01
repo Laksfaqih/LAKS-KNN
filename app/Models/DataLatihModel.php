@@ -37,4 +37,9 @@ class DataLatihModel extends Model
         'kedalaman_tanah'   => 'integer',
         'curah_hujan'       => 'integer',
     ];
+
+    public function ordered(): self
+    {
+        return $this->orderBy('id', 'DESC');
+    }
 }

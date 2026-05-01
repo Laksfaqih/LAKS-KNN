@@ -7,6 +7,7 @@
         <p>Total data tersimpan: <?= esc((string) $totalData) ?></p>
     </div>
     <div class="page-actions">
+        <a class="btn-inline btn-inline-secondary" href="<?= site_url('data-latih/export') ?>">Export CSV</a>
         <a class="btn-inline btn-inline-secondary" href="#import-csv">Import CSV</a>
         <a class="btn-inline" href="<?= site_url('data-latih/create') ?>">Tambah Data</a>
     </div>
@@ -52,7 +53,7 @@
         </div>
     <?php else: ?>
         <div class="table-wrapper">
-            <table class="data-table">
+            <table class="data-table data-table-compact data-table-training">
                 <thead>
                     <tr>
                         <th>No</th>
@@ -63,10 +64,9 @@
                         <th>Ketinggian</th>
                         <th>Kedalaman</th>
                         <th>Curah Hujan</th>
-                        <th>Tebu</th>
-                        <th>Cabai</th>
-                        <th>Jagung</th>
-                        <th>Padi</th>
+                        <?php foreach ($komoditas as $commodity): ?>
+                            <th><?= esc($commodity['nama']) ?></th>
+                        <?php endforeach; ?>
                         <th>Aksi</th>
                     </tr>
                 </thead>
@@ -82,10 +82,9 @@
                             <td><?= esc((string) $row['ketinggian_tempat']) ?> mdpl</td>
                             <td><?= esc((string) $row['kedalaman_tanah']) ?> cm</td>
                             <td><?= esc((string) $row['curah_hujan']) ?> mm</td>
-                            <td><span class="badge"><?= esc($row['kelas_tebu']) ?></span></td>
-                            <td><span class="badge"><?= esc($row['kelas_cabai']) ?></span></td>
-                            <td><span class="badge"><?= esc($row['kelas_jagung']) ?></span></td>
-                            <td><span class="badge"><?= esc($row['kelas_padi']) ?></span></td>
+                            <?php foreach ($komoditas as $commodity): ?>
+                                <td><span class="badge"><?= esc($row['commodity_labels'][(int) $commodity['id']] ?? 'N') ?></span></td>
+                            <?php endforeach; ?>
                             <td>
                                 <div class="table-actions">
                                     <a class="link-edit" href="<?= site_url('data-latih/' . $row['id'] . '/edit') ?>">Edit</a>

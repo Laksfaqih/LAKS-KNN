@@ -220,21 +220,21 @@ $normalized = ($value - $min) / ($max - $min);
 ### Fitur Terkait PRD
 | ID | Fitur | Status |
 |----|-------|--------|
-| KL-01 | Input Data Uji | Fase ini |
-| KL-02 | Normalisasi Data | Fase ini |
-| KL-03 | Proses KNN | Fase ini |
-| KL-04 | Klasifikasi Multi-Komoditas | Fase ini |
-| KL-05 | Perbandingan Kelayakan | Fase ini |
-| KL-06 | Rekomendasi Komoditas | Fase ini |
-| KL-07 | Konfigurasi Nilai K | Fase ini |
+| KL-01 | Input Data Uji | Selesai |
+| KL-02 | Normalisasi Data | Selesai |
+| KL-03 | Proses KNN | Selesai |
+| KL-04 | Klasifikasi Multi-Komoditas | Selesai |
+| KL-05 | Perbandingan Kelayakan | Selesai |
+| KL-06 | Rekomendasi Komoditas | Selesai |
+| KL-07 | Konfigurasi Nilai K | Selesai |
 
 ### Kriteria Selesai
-- [ ] Normalisasi data berfungsi dengan benar
-- [ ] Perhitungan Euclidean Distance akurat
-- [ ] Algoritma KNN menghasilkan klasifikasi yang benar
-- [ ] Klasifikasi berjalan untuk 4 komoditas
-- [ ] Hasil klasifikasi tersimpan di database
-- [ ] Rekomendasi komoditas ditampilkan
+- [x] Normalisasi data berfungsi dengan benar
+- [x] Perhitungan Euclidean Distance akurat
+- [x] Algoritma KNN menghasilkan klasifikasi yang benar
+- [x] Klasifikasi berjalan untuk 4 komoditas
+- [x] Hasil klasifikasi tersimpan di database
+- [x] Rekomendasi komoditas ditampilkan
 
 ---
 
@@ -251,45 +251,45 @@ Integrasi hasil klasifikasi dengan peta interaktif menggunakan Leaflet.js.
 - Tile layer dari OpenStreetMap
 
 #### 5.2 Marker Lahan
-- Menampilkan marker untuk setiap data uji yang sudah diklasifikasi
-- Marker dengan warna berbeda berdasarkan tingkat kelayakan:
-  - S1 (Sangat Sesuai): Hijau
-  - S2 (Sesuai): Kuning
-  - S3 (Cukup Sesuai): Orange
-  - N (Tidak Sesuai): Merah
+- Menampilkan area/poligon untuk setiap data uji yang sudah diklasifikasi
+- Warna area berbeda berdasarkan komoditas rekomendasi:
+  - Tebu: Hijau
+  - Jagung: Kuning
+  - Cabe: Orange
+  - Padi: Merah
 
 #### 5.3 Filter Komoditas
-- Dropdown/button untuk memilih komoditas
-- Update tampilan marker berdasarkan komoditas yang dipilih
+- Legenda komoditas berdasarkan warna rekomendasi
+- Popup menampilkan semua hasil komoditas untuk setiap area
 
 #### 5.4 Popup Informasi Lahan
-- Klik marker menampilkan detail:
+- Klik area menampilkan detail:
   - Nama lahan
   - Parameter lahan
-  - Hasil klasifikasi
-  - Rekomendasi
+  - Semua hasil klasifikasi komoditas
+  - Rekomendasi komoditas
 
 #### 5.5 Legenda Peta
-- Legenda warna untuk tingkat kelayakan
+- Legenda warna untuk komoditas rekomendasi
 - Posisi di pojok peta
 
 ### Fitur Terkait PRD
 | ID | Fitur | Status |
 |----|-------|--------|
-| GIS-01 | Peta Dasar | Fase ini |
-| GIS-02 | Layer Kelayakan | Fase ini |
-| GIS-03 | Filter Komoditas | Fase ini |
-| GIS-04 | Informasi Lahan | Fase ini |
-| GIS-05 | Legenda Peta | Fase ini |
+| GIS-01 | Peta Dasar | Selesai |
+| GIS-02 | Layer Kelayakan | Selesai |
+| GIS-03 | Filter Komoditas | Selesai |
+| GIS-04 | Informasi Lahan | Selesai |
+| GIS-05 | Legenda Peta | Selesai |
 | GIS-06 | Export Peta | Fase 6 (opsional) |
 
 ### Kriteria Selesai
-- [ ] Peta Leaflet berhasil ditampilkan
-- [ ] Marker lahan muncul di posisi yang benar
-- [ ] Warna marker sesuai tingkat kelayakan
-- [ ] Filter komoditas berfungsi
-- [ ] Popup informasi menampilkan data yang benar
-- [ ] Legenda ditampilkan dengan benar
+- [x] Peta Leaflet berhasil ditampilkan
+- [x] Area lahan/poligon muncul di posisi yang benar
+- [x] Warna area sesuai komoditas rekomendasi
+- [x] Popup seluruh hasil komoditas berfungsi
+- [x] Popup informasi menampilkan data yang benar
+- [x] Legenda ditampilkan dengan benar
 
 ---
 
@@ -313,7 +313,7 @@ Implementasi dashboard statistik dan fitur pelengkap lainnya.
 #### 6.3 Riwayat Klasifikasi
 - Tabel riwayat hasil klasifikasi
 - Detail per klasifikasi
-- Filter berdasarkan tanggal/komoditas
+- Tampilan hasil per komoditas dinamis
 
 #### 6.4 Export Data (Opsional)
 - Export data latih ke CSV
@@ -328,18 +328,29 @@ Implementasi dashboard statistik dan fitur pelengkap lainnya.
 ### Fitur Terkait PRD
 | ID | Fitur | Status |
 |----|-------|--------|
-| DB-01 | Dashboard Statistik | Fase ini |
-| DB-02 | Grafik Distribusi | Fase ini |
-| DB-03 | Laporan Klasifikasi | Fase ini (opsional) |
-| DL-06 | Export Data Latih | Fase ini (opsional) |
+| DB-01 | Dashboard Statistik | Selesai |
+| DB-02 | Grafik Distribusi | Selesai |
+| DB-03 | Laporan Klasifikasi | Selesai |
+| DL-06 | Export Data Latih | Selesai (CSV) |
 | GIS-06 | Export Peta | Fase ini (opsional) |
 
 ### Kriteria Selesai
-- [ ] Dashboard menampilkan statistik dengan benar
-- [ ] Grafik distribusi berfungsi
-- [ ] Riwayat klasifikasi dapat dilihat
-- [ ] UI responsif di desktop dan mobile
-- [ ] Tidak ada error pada semua halaman
+- [x] Dashboard menampilkan statistik dengan benar
+- [x] Grafik distribusi berfungsi
+- [x] Riwayat klasifikasi dapat dilihat
+- [x] UI responsif di desktop dan mobile
+- [x] Tidak ada error pada semua halaman
+
+### Catatan Implementasi Saat Ini
+- Modul `Kriteria` aktif sebagai master komoditas dinamis
+- Modul `Nilai Kriteria` aktif sebagai master acuan/rentang admin untuk 7 parameter
+- Proses klasifikasi tetap menggunakan KNN murni; `Nilai Kriteria` tidak ikut menentukan hasil
+- Input spasial klasifikasi menggunakan gambar area/poligon di peta
+- Header halaman dibuat responsif agar tombol aksi tidak terpotong pada lebar konten yang sempit
+- Tabel `Nilai Kriteria` dibuat versi compact tanpa lebar minimum 1200px agar muat penuh tanpa scroll horizontal di desktop umum
+- Tabel `Data Latih` juga dibuat lebih compact agar 7 parameter + kolom komoditas tetap muat tanpa scroll horizontal pada desktop umum
+- Wrapper layout dashboard dipaksa `width: 100%` dan area konten diberi `min-width: 0` agar tidak menyisakan ruang kosong di sisi kanan
+- `README.md` diperbarui menjadi panduan instalasi project yang spesifik, termasuk setup `.env`, migration, seeder, login default, dan troubleshooting dasar
 
 ---
 
