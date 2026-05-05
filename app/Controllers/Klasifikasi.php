@@ -46,7 +46,7 @@ class Klasifikasi extends BaseController
     public function index()
     {
         $recentResults = $this->db->table('hasil_klasifikasi hk')
-            ->select('hk.id, hk.nilai_k, hk.rekomendasi_komoditas, du.nama_lahan')
+            ->select('hk.id, hk.nilai_k, hk.rekomendasi_komoditas, du.nama_lahan, du.latitude, du.longitude')
             ->join('data_uji du', 'du.id = hk.data_uji_id')
             ->orderBy('hk.id', 'DESC')
             ->limit(10)
@@ -59,6 +59,33 @@ class Klasifikasi extends BaseController
             'validation'        => service('validation'),
             'totalDataLatih'    => $this->dataLatihModel->countAll(),
             'recentResults'     => $recentResults,
+        ]);
+    }
+
+    public function reverseGeocode()
+    {
+        $latitude = (float) $this->request->getPost('latitude');
+        $longitude = (float) $this->request->getPost('longitude');
+
+        if (! $this->isInsideServiceArea($latitude, $longitude)) {
+            return $this->response->setJSON([
+                'ok' => false,
+                'message' => 'Koordinat harus berada di area Curah Kalak.',
+            ])->setStatusCode(422);
+        }
+
+        try {
+            $address = $this->fetchAddressFromCoordinates($latitude, $longitude);
+        } catch (\Throwable $exception) {
+            return $this->response->setJSON([
+                'ok' => false,
+                'message' => $exception->getMessage(),
+            ])->setStatusCode(422);
+        }
+
+        return $this->response->setJSON([
+            'ok' => true,
+            'address' => $address,
         ]);
     }
 
@@ -151,12 +178,13 @@ class Klasifikasi extends BaseController
 
     private function payload(): array
     {
-        $namaLahan = trim((string) $this->request->getPost('nama_lahan'));
-        $polygonGeojson = trim((string) $this->request->getPost('polygon_geojson'));
-        $centroid = $this->geoPolygon->centroidFromGeoJson($polygonGeojson);
+        $latitude = (float) $this->request->getPost('latitude');
+        $longitude = (float) $this->request->getPost('longitude');
+        $namaLahan = $this->fetchAddressFromCoordinates($latitude, $longitude);
+        $polygonGeojson = $this->geoPolygon->squareGeoJsonFromPoint($latitude, $longitude, 50.0);
 
         return [
-            'nama_lahan'         => $namaLahan === '' ? null : $namaLahan,
+            'nama_lahan'         => $namaLahan,
             'kemiringan_lereng'  => $this->request->getPost('kemiringan_lereng'),
             'luas_lahan'         => $this->request->getPost('luas_lahan'),
             'ph_tanah'           => $this->request->getPost('ph_tanah'),
@@ -165,17 +193,18 @@ class Klasifikasi extends BaseController
             'kedalaman_tanah'    => $this->request->getPost('kedalaman_tanah'),
             'curah_hujan'        => $this->request->getPost('curah_hujan'),
             'irigasi'            => $this->request->getPost('irigasi'),
-            'latitude'           => number_format($centroid['latitude'], 8, '.', ''),
-            'longitude'          => number_format($centroid['longitude'], 8, '.', ''),
+            'latitude'           => number_format($latitude, 8, '.', ''),
+            'longitude'          => number_format($longitude, 8, '.', ''),
             'polygon_geojson'    => $polygonGeojson,
-            'geometry_source'    => 'drawn_polygon',
+            'geometry_source'    => 'coordinate_input_auto_polygon',
         ];
     }
 
     private function validationRules(): array
     {
         return [
-            'nama_lahan'         => 'permit_empty|max_length[100]',
+            'latitude'           => 'required|decimal|greater_than_equal_to[-90]|less_than_equal_to[90]',
+            'longitude'          => 'required|decimal|greater_than_equal_to[-180]|less_than_equal_to[180]',
             'kemiringan_lereng'  => 'required|decimal|greater_than_equal_to[0]',
             'luas_lahan'         => 'required|decimal|greater_than[0]',
             'ph_tanah'           => 'required|decimal|greater_than_equal_to[0]|less_than_equal_to[14]',
@@ -185,14 +214,24 @@ class Klasifikasi extends BaseController
             'curah_hujan'        => 'required|integer|greater_than[0]',
             'irigasi'            => 'required|integer|greater_than_equal_to[0]',
             'nilai_k'            => 'required|integer|greater_than[0]',
-            'polygon_geojson'    => 'required',
         ];
     }
 
     private function validationMessages(): array
     {
         return [
-            'nama_lahan' => ['max_length' => 'Nama lahan maksimal 100 karakter.'],
+            'latitude' => [
+                'required'              => 'Latitude wajib diisi.',
+                'decimal'               => 'Latitude harus berupa angka desimal.',
+                'greater_than_equal_to' => 'Latitude minimal -90.',
+                'less_than_equal_to'    => 'Latitude maksimal 90.',
+            ],
+            'longitude' => [
+                'required'              => 'Longitude wajib diisi.',
+                'decimal'               => 'Longitude harus berupa angka desimal.',
+                'greater_than_equal_to' => 'Longitude minimal -180.',
+                'less_than_equal_to'    => 'Longitude maksimal 180.',
+            ],
             'kemiringan_lereng' => [
                 'required' => 'Kemiringan lereng wajib diisi.',
                 'decimal'  => 'Kemiringan lereng harus berupa angka desimal.',
@@ -229,9 +268,6 @@ class Klasifikasi extends BaseController
             'nilai_k' => [
                 'required' => 'Nilai K wajib diisi.',
                 'integer'  => 'Nilai K harus berupa bilangan bulat.',
-            ],
-            'polygon_geojson' => [
-                'required' => 'Area lahan wajib digambar di peta.',
             ],
         ];
     }
@@ -276,5 +312,38 @@ class Klasifikasi extends BaseController
             && $latitude <= self::SERVICE_AREA_BOUNDS['lat_max']
             && $longitude >= self::SERVICE_AREA_BOUNDS['lng_min']
             && $longitude <= self::SERVICE_AREA_BOUNDS['lng_max'];
+    }
+
+    private function fetchAddressFromCoordinates(float $latitude, float $longitude): string
+    {
+        $query = http_build_query([
+            'lat' => number_format($latitude, 8, '.', ''),
+            'lon' => number_format($longitude, 8, '.', ''),
+            'format' => 'jsonv2',
+            'addressdetails' => 1,
+            'zoom' => 18,
+        ]);
+
+        $url = 'https://nominatim.openstreetmap.org/reverse?' . $query;
+        $opts = [
+            'http' => [
+                'method' => 'GET',
+                'header' => "User-Agent: SistemKlasifikasiLahan/1.0\r\nAccept: application/json\r\n",
+                'timeout' => 12,
+            ],
+        ];
+        $context = stream_context_create($opts);
+        $response = @file_get_contents($url, false, $context);
+        if ($response === false) {
+            throw new \RuntimeException('Gagal mengambil alamat otomatis dari koordinat.');
+        }
+
+        $decoded = json_decode($response, true);
+        $address = trim((string) ($decoded['display_name'] ?? ''));
+        if ($address === '') {
+            throw new \RuntimeException('Alamat tidak ditemukan untuk koordinat tersebut.');
+        }
+
+        return $address;
     }
 }

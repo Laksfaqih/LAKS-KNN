@@ -4,6 +4,40 @@ namespace App\Libraries;
 
 class GeoPolygon
 {
+    public function squareGeoJsonFromPoint(float $latitude, float $longitude, float $sideMeters = 50.0): string
+    {
+        $halfSide = $sideMeters / 2.0;
+        $metersPerDegreeLat = 111320.0;
+        $metersPerDegreeLng = max(111320.0 * cos(deg2rad($latitude)), 0.0001);
+
+        $latOffset = $halfSide / $metersPerDegreeLat;
+        $lngOffset = $halfSide / $metersPerDegreeLng;
+
+        $south = $latitude - $latOffset;
+        $north = $latitude + $latOffset;
+        $west = $longitude - $lngOffset;
+        $east = $longitude + $lngOffset;
+
+        return json_encode([
+            'type' => 'Feature',
+            'geometry' => [
+                'type' => 'Polygon',
+                'coordinates' => [[
+                    [$west, $south],
+                    [$east, $south],
+                    [$east, $north],
+                    [$west, $north],
+                    [$west, $south],
+                ]],
+            ],
+            'properties' => [
+                'generated' => true,
+                'source' => 'coordinate_input',
+                'side_meters' => $sideMeters,
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
+    }
+
     public function centroidFromGeoJson(string $geoJson): array
     {
         $decoded = json_decode($geoJson, true);

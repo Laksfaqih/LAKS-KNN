@@ -424,8 +424,9 @@ class NilaiKriteria extends BaseController
         }
 
         preg_match_all('/\d[\d\.,]*/', $numberSource, $matches);
+        $isSquareMeter = $area && str_contains($text, 'm2');
         $numbers = array_values(array_filter(array_map(
-            fn(string $token): ?float => $this->toNumber($token, $decimal, $area),
+            fn(string $token): ?float => $this->toNumber($token, $decimal, $isSquareMeter),
             $matches[0] ?? [],
         ), static fn($v): bool => $v !== null));
 
@@ -448,7 +449,7 @@ class NilaiKriteria extends BaseController
         return [$numbers[0], $numbers[0]];
     }
 
-    private function toNumber(string $token, bool $decimal, bool $area): ?float
+    private function toNumber(string $token, bool $decimal, bool $isSquareMeter): ?float
     {
         $value = trim($token);
         if ($value === '') {
@@ -476,7 +477,7 @@ class NilaiKriteria extends BaseController
             return null;
         }
 
-        if ($area && str_contains(mb_strtolower($token), 'm2')) {
+        if ($isSquareMeter) {
             return $numeric / 10000;
         }
 

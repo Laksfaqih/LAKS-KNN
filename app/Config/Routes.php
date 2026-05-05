@@ -48,6 +48,7 @@ $routes->group('nilai-kriteria', ['filter' => 'auth'], function ($routes) {
 
 $routes->group('klasifikasi', ['filter' => 'auth'], function ($routes) {
     $routes->get('/', 'Klasifikasi::index');
+    $routes->post('reverse-geocode', 'Klasifikasi::reverseGeocode');
     $routes->post('/', 'Klasifikasi::store');
     $routes->get('hasil/(:num)', 'Klasifikasi::show/$1');
 });

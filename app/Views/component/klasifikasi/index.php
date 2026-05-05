@@ -7,10 +7,6 @@
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
     crossorigin=""
 >
-<link
-    rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"
->
 <?= $this->endSection() ?>
 
 <?= $this->section('content') ?>
@@ -44,8 +40,24 @@
     <form class="classification-form" action="<?= site_url('klasifikasi') ?>" method="post">
         <div class="classification-fields">
             <div class="group-input">
-                <label for="nama_lahan">Lokasi / Nama Lahan</label>
-                <input id="nama_lahan" name="nama_lahan" type="text" value="<?= esc(old('nama_lahan')) ?>" placeholder="Contoh: Lahan Blok A">
+                <label for="latitude">Latitude</label>
+                <input id="latitude" name="latitude" type="number" step="0.00000001" value="<?= esc(old('latitude')) ?>" required>
+                <?php if ($validation->hasError('latitude')): ?>
+                    <small class="field-error"><?= esc($validation->getError('latitude')) ?></small>
+                <?php endif; ?>
+            </div>
+
+            <div class="group-input">
+                <label for="longitude">Longitude</label>
+                <input id="longitude" name="longitude" type="number" step="0.00000001" value="<?= esc(old('longitude')) ?>" required>
+                <?php if ($validation->hasError('longitude')): ?>
+                    <small class="field-error"><?= esc($validation->getError('longitude')) ?></small>
+                <?php endif; ?>
+            </div>
+
+            <div class="group-input full-width">
+                <label for="detected_address">Alamat Terdeteksi</label>
+                <input id="detected_address" type="text" value="" placeholder="Alamat akan terisi otomatis dari koordinat" readonly>
             </div>
 
             <?php foreach ([
@@ -82,13 +94,9 @@
         </div>
 
         <div class="classification-map-panel">
-            <label class="map-draw-label">Area Lahan</label>
+            <label class="map-draw-label">Titik Koordinat Lahan</label>
             <div id="classification-map" class="map-canvas map-canvas-compact"></div>
-            <input id="polygon_geojson" name="polygon_geojson" type="hidden" value="<?= esc(old('polygon_geojson')) ?>">
-            <?php if ($validation->hasError('polygon_geojson')): ?>
-                <small class="field-error"><?= esc($validation->getError('polygon_geojson')) ?></small>
-            <?php endif; ?>
-            <p class="section-copy">Gambar satu poligon lahan pada peta. Gunakan tool polygon di kiri atas.</p>
+            <p class="section-copy">Masukkan latitude/longitude. Marker peta akan berpindah otomatis.</p>
         </div>
 
         <div class="form-actions full-width">
@@ -108,7 +116,8 @@
             <table class="data-table history-table">
                 <thead>
                     <tr>
-                        <th>Nama Lahan</th>
+                        <th>Lokasi</th>
+                        <th>Koordinat</th>
                         <th>K</th>
                         <th>Rekomendasi</th>
                         <th>Aksi</th>
@@ -118,6 +127,7 @@
                     <?php foreach ($recentResults as $row): ?>
                         <tr>
                             <td><?= esc($row['nama_lahan'] ?: 'Tanpa nama') ?></td>
+                            <td><?= esc(number_format((float) $row['latitude'], 6)) ?>, <?= esc(number_format((float) $row['longitude'], 6)) ?></td>
                             <td><?= esc((string) $row['nilai_k']) ?></td>
                             <td><span class="badge"><?= esc($row['rekomendasi_komoditas']) ?></span></td>
                             <td><a class="link-edit" href="<?= site_url('klasifikasi/hasil/' . $row['id']) ?>">Lihat</a></td>
@@ -136,8 +146,8 @@
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
     crossorigin=""
 ></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 <script>
+    const reverseGeocodeUrl = <?= json_encode(site_url('klasifikasi/reverse-geocode')) ?>;
     const serviceAreaBounds = L.latLngBounds(
         [-7.7865, 114.1500], // southWest (Curah Kalak)
         [-7.7300, 114.2150]  // northEast (Curah Kalak)
@@ -146,8 +156,13 @@
         maxBounds: serviceAreaBounds,
         maxBoundsViscosity: 1.0
     });
-    const hiddenInput = document.getElementById('polygon_geojson');
-    const drawnItems = new L.FeatureGroup().addTo(map);
+    const latitudeInput = document.getElementById('latitude');
+    const longitudeInput = document.getElementById('longitude');
+    const detectedAddressInput = document.getElementById('detected_address');
+    const form = document.querySelector('.classification-form');
+    let marker = null;
+    let geocodeOk = false;
+    let geocodeTimer = null;
 
     map.fitBounds(serviceAreaBounds);
     map.setMinZoom(map.getBoundsZoom(serviceAreaBounds));
@@ -157,56 +172,96 @@
         attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    const drawControl = new L.Control.Draw({
-        draw: {
-            polygon: true,
-            polyline: false,
-            rectangle: false,
-            circle: false,
-            marker: false,
-            circlemarker: false
-        },
-        edit: {
-            featureGroup: drawnItems,
-            remove: true
+    const updateMarker = () => {
+        const lat = parseFloat(latitudeInput.value);
+        const lng = parseFloat(longitudeInput.value);
+        if (Number.isNaN(lat) || Number.isNaN(lng)) {
+            geocodeOk = false;
+            detectedAddressInput.value = '';
+            return;
         }
-    });
-    map.addControl(drawControl);
-
-    const syncGeoJson = () => {
-        const layers = drawnItems.getLayers();
-        if (layers.length === 0) {
-            hiddenInput.value = '';
+        const point = L.latLng(lat, lng);
+        if (! serviceAreaBounds.contains(point)) {
+            geocodeOk = false;
+            detectedAddressInput.value = 'Koordinat di luar area Curah Kalak';
             return;
         }
 
-        const geoJson = layers[0].toGeoJSON();
-        hiddenInput.value = JSON.stringify(geoJson);
+        if (!marker) {
+            marker = L.marker(point).addTo(map);
+        } else {
+            marker.setLatLng(point);
+        }
+        map.setView(point, Math.max(map.getZoom(), 16));
     };
 
-    map.on(L.Draw.Event.CREATED, (event) => {
-        if (! serviceAreaBounds.contains(event.layer.getBounds())) {
-            alert('Polygon harus berada di area Curah Kalak, Kec. Jangkar, Situbondo.');
+    const runReverseGeocode = async () => {
+        updateMarker();
+        const lat = parseFloat(latitudeInput.value);
+        const lng = parseFloat(longitudeInput.value);
+        if (Number.isNaN(lat) || Number.isNaN(lng)) {
+            geocodeOk = false;
+            return;
+        }
+        const point = L.latLng(lat, lng);
+        if (! serviceAreaBounds.contains(point)) {
+            geocodeOk = false;
             return;
         }
 
-        drawnItems.clearLayers();
-        drawnItems.addLayer(event.layer);
-        syncGeoJson();
+        detectedAddressInput.value = 'Mendeteksi alamat...';
+        geocodeOk = false;
+
+        try {
+            const body = new URLSearchParams();
+            body.set('latitude', latitudeInput.value);
+            body.set('longitude', longitudeInput.value);
+
+            const response = await fetch(reverseGeocodeUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                },
+                body: body.toString()
+            });
+            const json = await response.json();
+            if (!response.ok || !json.ok) {
+                throw new Error(json.message || 'Gagal membaca alamat otomatis.');
+            }
+
+            detectedAddressInput.value = json.address;
+            geocodeOk = true;
+        } catch (error) {
+            detectedAddressInput.value = error.message || 'Gagal membaca alamat otomatis.';
+            geocodeOk = false;
+        }
+    };
+
+    const scheduleReverseGeocode = () => {
+        if (geocodeTimer) {
+            clearTimeout(geocodeTimer);
+        }
+        geocodeTimer = setTimeout(runReverseGeocode, 450);
+    };
+
+    latitudeInput.addEventListener('input', scheduleReverseGeocode);
+    longitudeInput.addEventListener('input', scheduleReverseGeocode);
+
+    form.addEventListener('submit', async (event) => {
+        if (geocodeOk) {
+            return;
+        }
+        event.preventDefault();
+        await runReverseGeocode();
+        if (!geocodeOk) {
+            alert('Alamat otomatis belum valid. Periksa koordinat atau koneksi internet lalu coba lagi.');
+            return;
+        }
+        form.submit();
     });
 
-    map.on(L.Draw.Event.EDITED, syncGeoJson);
-    map.on(L.Draw.Event.DELETED, syncGeoJson);
-
-    if (hiddenInput.value) {
-        try {
-            const parsed = JSON.parse(hiddenInput.value);
-            const restoredLayer = L.geoJSON(parsed);
-            restoredLayer.eachLayer((layer) => drawnItems.addLayer(layer));
-            map.fitBounds(drawnItems.getBounds(), { padding: [20, 20] });
-        } catch (error) {
-            hiddenInput.value = '';
-        }
+    if (latitudeInput.value && longitudeInput.value) {
+        runReverseGeocode();
     }
 </script>
 <?= $this->endSection() ?>
