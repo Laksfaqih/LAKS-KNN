@@ -8,7 +8,7 @@ $validation = $validation ?? service('validation');
 <section class="page-header">
     <div>
         <h2><?= esc($formTitle) ?></h2>
-        <p>Atur nama komoditas, slug, warna peta, dan status aktif.</p>
+        <p>Atur nama komoditas, warna peta, dan status aktif.</p>
     </div>
     <a class="btn-inline btn-inline-secondary" href="<?= site_url('kriteria') ?>">Kembali</a>
 </section>
@@ -26,14 +26,6 @@ $validation = $validation ?? service('validation');
             <input id="nama" name="nama" type="text" value="<?= esc(old('nama', $komoditas['nama'] ?? '')) ?>" required>
             <?php if ($validation->hasError('nama')): ?>
                 <small class="field-error"><?= esc($validation->getError('nama')) ?></small>
-            <?php endif; ?>
-        </div>
-
-        <div class="group-input">
-            <label for="slug">Slug</label>
-            <input id="slug" name="slug" type="text" value="<?= esc(old('slug', $komoditas['slug'] ?? '')) ?>" required>
-            <?php if ($validation->hasError('slug')): ?>
-                <small class="field-error"><?= esc($validation->getError('slug')) ?></small>
             <?php endif; ?>
         </div>
 

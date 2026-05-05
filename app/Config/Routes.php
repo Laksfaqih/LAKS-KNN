@@ -39,6 +39,7 @@ $routes->group('kriteria', ['filter' => 'auth'], function ($routes) {
 $routes->group('nilai-kriteria', ['filter' => 'auth'], function ($routes) {
     $routes->get('/', 'NilaiKriteria::index');
     $routes->get('create', 'NilaiKriteria::create');
+    $routes->post('import', 'NilaiKriteria::import');
     $routes->post('/', 'NilaiKriteria::store');
     $routes->get('(:num)/edit', 'NilaiKriteria::edit/$1');
     $routes->post('(:num)', 'NilaiKriteria::update/$1');

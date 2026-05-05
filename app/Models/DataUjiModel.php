@@ -20,6 +20,7 @@ class DataUjiModel extends Model
         'ketinggian_tempat',
         'kedalaman_tanah',
         'curah_hujan',
+        'irigasi',
         'latitude',
         'longitude',
         'polygon_geojson',
@@ -37,6 +38,7 @@ class DataUjiModel extends Model
         'ketinggian_tempat' => 'integer',
         'kedalaman_tanah'   => 'integer',
         'curah_hujan'       => 'integer',
+        'irigasi'           => 'integer',
         'latitude'          => '?float',
         'longitude'         => '?float',
     ];

@@ -19,10 +19,10 @@ class DataLatihModel extends Model
         'ketinggian_tempat',
         'kedalaman_tanah',
         'curah_hujan',
-        'kelas_tebu',
-        'kelas_cabai',
-        'kelas_jagung',
-        'kelas_padi',
+        'irigasi',
+        'komoditas_id',
+        'latitude',
+        'longitude',
     ];
 
     protected bool $allowEmptyInserts = false;
@@ -36,6 +36,10 @@ class DataLatihModel extends Model
         'ketinggian_tempat' => 'integer',
         'kedalaman_tanah'   => 'integer',
         'curah_hujan'       => 'integer',
+        'irigasi'           => 'integer',
+        'komoditas_id'      => 'integer',
+        'latitude'          => 'float',
+        'longitude'         => 'float',
     ];
 
     public function ordered(): self

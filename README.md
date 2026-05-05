@@ -121,7 +121,6 @@ Setelah migration berjalan, aplikasi akan menyiapkan struktur utama berikut:
 - `hasil_klasifikasi`
 - `komoditas`
 - `nilai_kriteria`
-- `data_latih_komoditas`
 - `hasil_klasifikasi_detail`
 
 Migration juga akan menambahkan komoditas awal:
@@ -135,13 +134,13 @@ Migration juga akan menambahkan komoditas awal:
 
 Import CSV dilakukan dari halaman `Data Latih`.
 
-Format header CSV mengikuti komoditas aktif pada sistem. Contoh umum:
+Format header CSV sudah tetap untuk model data latih baru. Contoh:
 
 ```csv
-kemiringan_lereng,luas_lahan,ph_tanah,jenis_tanah,ketinggian_tempat,kedalaman_tanah,curah_hujan,kelas_tebu,kelas_jagung,kelas_cabe,kelas_padi
+kemiringan_lereng,luas_lahan,ph_tanah,jenis_tanah,ketinggian_tempat,kedalaman_tanah,curah_hujan,jenis_tanaman,latitude,longitude
 ```
 
-Gunakan fitur `Export CSV` di halaman `Data Latih` untuk mendapatkan template paling aman sesuai kondisi master komoditas saat ini.
+Nilai `jenis_tanaman` memakai nama komoditas aktif. Gunakan fitur `Export CSV` di halaman `Data Latih` untuk mendapatkan template paling aman sesuai kondisi master komoditas saat ini.
 
 ## Alternatif Import SQL Lama
 

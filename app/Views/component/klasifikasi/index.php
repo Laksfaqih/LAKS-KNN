@@ -52,6 +52,7 @@
                 'kemiringan_lereng' => ['Lereng (%)', 'number', '0.01'],
                 'ketinggian_tempat' => ['Ketinggian (mdpl)', 'number', '1'],
                 'curah_hujan' => ['Curah Hujan (mm/tahun)', 'number', '1'],
+                'irigasi' => ['Irigasi (m)', 'number', '1'],
                 'ph_tanah' => ['pH Tanah', 'number', '0.01'],
                 'luas_lahan' => ['Luas Lahan (Ha)', 'number', '0.01'],
                 'kedalaman_tanah' => ['Kedalaman (cm)', 'number', '1'],
@@ -137,10 +138,19 @@
 ></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 <script>
-    const defaultCenter = [-7.709, 113.961];
-    const map = L.map('classification-map').setView(defaultCenter, 13);
+    const serviceAreaBounds = L.latLngBounds(
+        [-7.7865, 114.1500], // southWest (Curah Kalak)
+        [-7.7300, 114.2150]  // northEast (Curah Kalak)
+    );
+    const map = L.map('classification-map', {
+        maxBounds: serviceAreaBounds,
+        maxBoundsViscosity: 1.0
+    });
     const hiddenInput = document.getElementById('polygon_geojson');
     const drawnItems = new L.FeatureGroup().addTo(map);
+
+    map.fitBounds(serviceAreaBounds);
+    map.setMinZoom(map.getBoundsZoom(serviceAreaBounds));
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
@@ -175,6 +185,11 @@
     };
 
     map.on(L.Draw.Event.CREATED, (event) => {
+        if (! serviceAreaBounds.contains(event.layer.getBounds())) {
+            alert('Polygon harus berada di area Curah Kalak, Kec. Jangkar, Situbondo.');
+            return;
+        }
+
         drawnItems.clearLayers();
         drawnItems.addLayer(event.layer);
         syncGeoJson();

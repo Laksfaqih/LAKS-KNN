@@ -13,7 +13,6 @@ class KomoditasModel extends Model
     protected $protectFields    = true;
     protected $allowedFields    = [
         'nama',
-        'slug',
         'warna_peta',
         'urutan_tampil',
         'is_active',

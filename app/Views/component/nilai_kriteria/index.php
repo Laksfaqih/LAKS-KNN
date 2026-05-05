@@ -7,6 +7,10 @@
         <p>Rentang acuan komoditas untuk referensi admin dan dokumentasi.</p>
     </div>
     <div class="page-actions">
+        <form action="<?= site_url('nilai-kriteria/import') ?>" method="post" enctype="multipart/form-data" style="display:inline-flex;gap:8px;align-items:center;">
+            <input name="nilai_kriteria_csv" type="file" accept=".csv,text/csv" required>
+            <button class="btn-inline btn-inline-secondary" type="submit">Import CSV</button>
+        </form>
         <a class="btn-inline" href="<?= site_url('nilai-kriteria/create') ?>">Tambah Nilai Kriteria</a>
     </div>
 </section>
@@ -25,12 +29,14 @@
             <thead>
                 <tr>
                     <th>Komoditas</th>
+                    <th>Kelas</th>
                     <th>Lereng</th>
                     <th>Luas</th>
                     <th>pH</th>
                     <th>Ketinggian</th>
                     <th>Kedalaman</th>
                     <th>Curah Hujan</th>
+                    <th>Irigasi (m)</th>
                     <th>Jenis Tanah</th>
                     <th>Aksi</th>
                 </tr>
@@ -38,7 +44,7 @@
             <tbody>
                 <?php if ($nilaiKriteria === []): ?>
                     <tr>
-                        <td colspan="9">
+                        <td colspan="11">
                             <div class="empty-state compact-empty">
                                 <p>Belum ada nilai kriteria.</p>
                             </div>
@@ -55,12 +61,14 @@
                                 <?= esc($row['nama_komoditas']) ?>
                             </span>
                         </td>
+                        <td><span class="badge"><?= esc($row['kelas']) ?></span></td>
                         <td><?= esc(($row['kemiringan_min'] ?? '-') . ' - ' . ($row['kemiringan_max'] ?? '-')) ?></td>
                         <td><?= esc(($row['luas_min'] ?? '-') . ' - ' . ($row['luas_max'] ?? '-')) ?></td>
                         <td><?= esc(($row['ph_min'] ?? '-') . ' - ' . ($row['ph_max'] ?? '-')) ?></td>
                         <td><?= esc(($row['ketinggian_min'] ?? '-') . ' - ' . ($row['ketinggian_max'] ?? '-')) ?></td>
                         <td><?= esc(($row['kedalaman_min'] ?? '-') . ' - ' . ($row['kedalaman_max'] ?? '-')) ?></td>
                         <td><?= esc(($row['curah_hujan_min'] ?? '-') . ' - ' . ($row['curah_hujan_max'] ?? '-')) ?></td>
+                        <td><?= esc(($row['irigasi_min'] ?? '-') . ' - ' . ($row['irigasi_max'] ?? '-')) ?></td>
                         <td><?= esc($jenisTanah === [] ? '-' : implode(', ', $jenisTanah)) ?></td>
                         <td>
                             <div class="table-actions">

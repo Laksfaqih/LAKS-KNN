@@ -26,7 +26,6 @@
                 <tr>
                     <th>No</th>
                     <th>Nama Kriteria</th>
-                    <th>Slug</th>
                     <th>Warna Peta</th>
                     <th>Urutan</th>
                     <th>Status</th>
@@ -36,7 +35,7 @@
             <tbody>
                 <?php if ($komoditas === []): ?>
                     <tr>
-                        <td colspan="7">
+                        <td colspan="6">
                             <div class="empty-state compact-empty">
                                 <p>Belum ada data kriteria.</p>
                             </div>
@@ -48,7 +47,6 @@
                     <tr>
                         <td><?= esc((string) ($index + 1)) ?></td>
                         <td><?= esc($row['nama']) ?></td>
-                        <td><?= esc($row['slug']) ?></td>
                         <td>
                             <span class="color-pill">
                                 <span class="color-pill-swatch" style="background: <?= esc($row['warna_peta']) ?>"></span>

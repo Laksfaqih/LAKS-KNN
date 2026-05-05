@@ -11,13 +11,9 @@ class KnnClassifier
         'ketinggian_tempat',
         'kedalaman_tanah',
         'curah_hujan',
-    ];
-
-    private const CLASS_PRIORITY = [
-        'S1' => 4,
-        'S2' => 3,
-        'S3' => 2,
-        'N'  => 1,
+        'irigasi',
+        'latitude',
+        'longitude',
     ];
 
     /**
@@ -34,6 +30,11 @@ class KnnClassifier
             throw new \RuntimeException('Komoditas aktif belum tersedia.');
         }
 
+        $commodityMap = [];
+        foreach ($commodities as $commodity) {
+            $commodityMap[(int) $commodity['id']] = $commodity;
+        }
+
         $ranges = $this->buildRanges($trainingData);
         $normalizedTest = $this->normalizeRow($testingData, $ranges);
         $distanceRows = $this->buildDistanceRows($trainingData, $testingData, $normalizedTest, $ranges);
@@ -42,43 +43,13 @@ class KnnClassifier
 
         $effectiveK = min($requestedK, count($distanceRows));
         $neighbors = array_slice($distanceRows, 0, $effectiveK);
+        $votes = $this->aggregateVotes($neighbors, $commodityMap);
 
-        $predictions = [];
-        $recommendationCandidates = [];
-
-        foreach ($commodities as $commodity) {
-            $commodityId = (int) $commodity['id'];
-            $decision = $this->decideClass($neighbors, $commodityId);
-
-            $predictions[$commodityId] = [
-                'komoditas_id' => $commodityId,
-                'nama'         => (string) $commodity['nama'],
-                'slug'         => (string) $commodity['slug'],
-                'warna_peta'   => (string) $commodity['warna_peta'],
-                'kelas'        => $decision['class'],
-                'votes'        => $decision['votes'],
-                'average_distance' => $decision['average_distance'],
-            ];
-
-            $recommendationCandidates[] = [
-                'komoditas_id'      => $commodityId,
-                'nama'              => (string) $commodity['nama'],
-                'slug'              => (string) $commodity['slug'],
-                'warna_peta'        => (string) $commodity['warna_peta'],
-                'kelas'             => $decision['class'],
-                'class_priority'    => self::CLASS_PRIORITY[$decision['class']] ?? 0,
-                'votes'             => $decision['votes'],
-                'average_distance'  => $decision['average_distance'],
-                'urutan_tampil'     => (int) ($commodity['urutan_tampil'] ?? 0),
-            ];
+        if ($votes === []) {
+            throw new \RuntimeException('Data latih aktif tidak memiliki jenis tanaman yang valid.');
         }
 
-        usort($recommendationCandidates, static function (array $left, array $right): int {
-            $byClass = $right['class_priority'] <=> $left['class_priority'];
-            if ($byClass !== 0) {
-                return $byClass;
-            }
-
+        usort($votes, static function (array $left, array $right): int {
             $byVotes = $right['votes'] <=> $left['votes'];
             if ($byVotes !== 0) {
                 return $byVotes;
@@ -93,17 +64,21 @@ class KnnClassifier
         });
 
         return [
-            'ranges'              => $ranges,
-            'normalized_test'     => $normalizedTest,
-            'distances'           => $distanceRows,
-            'neighbors'           => $neighbors,
-            'predictions'         => $predictions,
-            'recommendation'      => $recommendationCandidates[0],
-            'effective_k'         => $effectiveK,
-            'requested_k'         => $requestedK,
+            'ranges'          => $ranges,
+            'normalized_test' => $normalizedTest,
+            'distances'       => $distanceRows,
+            'neighbors'       => $neighbors,
+            'votes'           => $votes,
+            'recommendation'  => $votes[0],
+            'effective_k'     => $effectiveK,
+            'requested_k'     => $requestedK,
         ];
     }
 
+    /**
+     * @param array<int, array<string, mixed>> $trainingData
+     * @return array<string, array{min: float, max: float}>
+     */
     private function buildRanges(array $trainingData): array
     {
         $ranges = [];
@@ -119,6 +94,10 @@ class KnnClassifier
         return $ranges;
     }
 
+    /**
+     * @param array<string, array{min: float, max: float}> $ranges
+     * @return array<string, float>
+     */
     private function normalizeRow(array $row, array $ranges): array
     {
         $normalized = [];
@@ -133,6 +112,12 @@ class KnnClassifier
         return $normalized;
     }
 
+    /**
+     * @param array<int, array<string, mixed>> $trainingData
+     * @param array<string, float> $normalizedTest
+     * @param array<string, array{min: float, max: float}> $ranges
+     * @return array<int, array<string, mixed>>
+     */
     private function buildDistanceRows(array $trainingData, array $testingData, array $normalizedTest, array $ranges): array
     {
         $rows = [];
@@ -151,10 +136,10 @@ class KnnClassifier
 
             $rows[] = [
                 'training_id'         => (int) $row['id'],
+                'komoditas_id'        => (int) $row['komoditas_id'],
                 'distance'            => sqrt($sum),
                 'normalized_training' => $normalizedTraining,
                 'jenis_tanah'         => $row['jenis_tanah'],
-                'commodity_labels'    => $row['commodity_labels'] ?? [],
                 'raw'                 => $row,
             ];
         }
@@ -162,56 +147,45 @@ class KnnClassifier
         return $rows;
     }
 
-    private function decideClass(array $neighbors, int $commodityId): array
+    /**
+     * @param array<int, array<string, mixed>> $neighbors
+     * @param array<int, array<string, mixed>> $commodityMap
+     * @return array<int, array<string, mixed>>
+     */
+    private function aggregateVotes(array $neighbors, array $commodityMap): array
     {
         $groups = [];
 
         foreach ($neighbors as $neighbor) {
-            $class = (string) ($neighbor['commodity_labels'][$commodityId] ?? '');
-            if ($class === '') {
+            $commodityId = (int) ($neighbor['komoditas_id'] ?? 0);
+            if ($commodityId === 0 || ! isset($commodityMap[$commodityId])) {
                 continue;
             }
 
-            if (! isset($groups[$class])) {
-                $groups[$class] = [
-                    'class'          => $class,
-                    'votes'          => 0,
-                    'distance_total' => 0.0,
+            if (! isset($groups[$commodityId])) {
+                $commodity = $commodityMap[$commodityId];
+                $groups[$commodityId] = [
+                    'komoditas_id'     => $commodityId,
+                    'nama'             => (string) $commodity['nama'],
+                    'warna_peta'       => (string) $commodity['warna_peta'],
+                    'urutan_tampil'    => (int) ($commodity['urutan_tampil'] ?? 0),
+                    'votes'            => 0,
+                    'distance_total'   => 0.0,
+                    'average_distance' => INF,
                 ];
             }
 
-            $groups[$class]['votes']++;
-            $groups[$class]['distance_total'] += (float) $neighbor['distance'];
+            $groups[$commodityId]['votes']++;
+            $groups[$commodityId]['distance_total'] += (float) $neighbor['distance'];
         }
 
-        if ($groups === []) {
-            return [
-                'class'            => 'N',
-                'votes'            => 0,
-                'average_distance' => INF,
-            ];
+        foreach ($groups as &$group) {
+            $group['average_distance'] = $group['votes'] > 0
+                ? $group['distance_total'] / $group['votes']
+                : INF;
+            unset($group['distance_total']);
         }
 
-        $decisions = array_values(array_map(static function (array $item): array {
-            $item['average_distance'] = $item['votes'] > 0 ? $item['distance_total'] / $item['votes'] : INF;
-
-            return $item;
-        }, $groups));
-
-        usort($decisions, static function (array $left, array $right): int {
-            $byVotes = $right['votes'] <=> $left['votes'];
-            if ($byVotes !== 0) {
-                return $byVotes;
-            }
-
-            $byDistance = $left['average_distance'] <=> $right['average_distance'];
-            if ($byDistance !== 0) {
-                return $byDistance;
-            }
-
-            return (self::CLASS_PRIORITY[$right['class']] ?? 0) <=> (self::CLASS_PRIORITY[$left['class']] ?? 0);
-        });
-
-        return $decisions[0];
+        return array_values($groups);
     }
 }

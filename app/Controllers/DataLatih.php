@@ -3,7 +3,7 @@
 namespace App\Controllers;
 
 use App\Libraries\CommodityCatalog;
-use App\Models\DataLatihKomoditasModel;
+use App\Libraries\SoilTypeCatalog;
 use App\Models\DataLatihModel;
 use CodeIgniter\Exceptions\PageNotFoundException;
 use CodeIgniter\HTTP\Files\UploadedFile;
@@ -12,26 +12,13 @@ use Config\Services;
 class DataLatih extends BaseController
 {
     private const PER_PAGE = 10;
-    private const KELAS_OPTIONS = ['S1', 'S2', 'S3', 'N'];
-    private const JENIS_TANAH_OPTIONS = [
-        'Aluvial',
-        'Andosol',
-        'Grumosol',
-        'Latosol',
-        'Mediteran',
-        'Organosol',
-        'Podsolik',
-        'Regosol',
-    ];
 
     private DataLatihModel $dataLatihModel;
-    private DataLatihKomoditasModel $dataLatihKomoditasModel;
     private CommodityCatalog $commodityCatalog;
 
     public function __construct()
     {
         $this->dataLatihModel = new DataLatihModel();
-        $this->dataLatihKomoditasModel = new DataLatihKomoditasModel();
         $this->commodityCatalog = new CommodityCatalog();
     }
 
@@ -39,33 +26,34 @@ class DataLatih extends BaseController
     {
         $page = max(1, (int) ($this->request->getGet('page_data_latih') ?? 1));
         $komoditas = $this->commodityCatalog->active();
-        $rows = $this->dataLatihModel->ordered()->paginate(self::PER_PAGE, 'data_latih', $page);
+        $rows = $this->dataLatihModel
+            ->select('data_latih.*, komoditas.nama AS nama_komoditas')
+            ->join('komoditas', 'komoditas.id = data_latih.komoditas_id')
+            ->orderBy('data_latih.id', 'DESC')
+            ->paginate(self::PER_PAGE, 'data_latih', $page);
 
         return view('component/data_latih/index', [
             'title'       => 'Data Latih',
-            'dataLatih'   => $this->attachCommodityLabels($rows, $komoditas),
+            'dataLatih'   => $rows,
             'pager'       => $this->dataLatihModel->pager,
             'totalData'   => $this->dataLatihModel->countAll(),
             'page'        => $page,
             'perPage'     => self::PER_PAGE,
             'komoditas'   => $komoditas,
-            'csvHeaders'  => $this->csvHeaders($komoditas),
+            'csvHeaders'  => $this->csvHeaders(),
         ]);
     }
 
     public function create()
     {
-        $komoditas = $this->commodityCatalog->active();
-
         return view('component/data_latih/form', [
             'title'             => 'Tambah Data Latih',
             'formTitle'         => 'Tambah Data Latih',
             'formAction'        => site_url('data-latih'),
             'submitLabel'       => 'Simpan Data',
             'dataLatih'         => null,
-            'jenisTanahOptions' => self::JENIS_TANAH_OPTIONS,
-            'kelasOptions'      => self::KELAS_OPTIONS,
-            'komoditas'         => $komoditas,
+            'jenisTanahOptions' => SoilTypeCatalog::all(),
+            'komoditasOptions'  => $this->commodityCatalog->active(),
             'validation'        => service('validation'),
         ]);
     }
@@ -73,11 +61,11 @@ class DataLatih extends BaseController
     public function store()
     {
         $komoditas = $this->commodityCatalog->active();
-        if (! $this->validate($this->validationRules($komoditas), $this->validationMessages($komoditas))) {
+        if (! $this->validate($this->validationRules($komoditas), $this->validationMessages())) {
             return redirect()->to('/data-latih/create')->withInput();
         }
 
-        $this->persistDataLatih($this->basePayload(), $this->commodityPayload($komoditas));
+        $this->dataLatihModel->insert($this->basePayload());
 
         return redirect()->to('/data-latih')->with('success', 'Data latih berhasil ditambahkan.');
     }
@@ -89,18 +77,14 @@ class DataLatih extends BaseController
             throw PageNotFoundException::forPageNotFound('Data latih tidak ditemukan.');
         }
 
-        $komoditas = $this->commodityCatalog->active();
-        $dataLatih['commodity_labels'] = $this->labelsByDataLatihId([$id])[$id] ?? [];
-
         return view('component/data_latih/form', [
             'title'             => 'Edit Data Latih',
             'formTitle'         => 'Edit Data Latih',
             'formAction'        => site_url('data-latih/' . $id),
             'submitLabel'       => 'Perbarui Data',
             'dataLatih'         => $dataLatih,
-            'jenisTanahOptions' => self::JENIS_TANAH_OPTIONS,
-            'kelasOptions'      => self::KELAS_OPTIONS,
-            'komoditas'         => $komoditas,
+            'jenisTanahOptions' => SoilTypeCatalog::all(),
+            'komoditasOptions'  => $this->commodityCatalog->active(),
             'validation'        => service('validation'),
         ]);
     }
@@ -112,11 +96,11 @@ class DataLatih extends BaseController
         }
 
         $komoditas = $this->commodityCatalog->active();
-        if (! $this->validate($this->validationRules($komoditas), $this->validationMessages($komoditas))) {
+        if (! $this->validate($this->validationRules($komoditas), $this->validationMessages())) {
             return redirect()->to('/data-latih/' . $id . '/edit')->withInput();
         }
 
-        $this->persistDataLatih($this->basePayload(), $this->commodityPayload($komoditas), $id);
+        $this->dataLatihModel->update($id, $this->basePayload());
 
         return redirect()->to('/data-latih')->with('success', 'Data latih berhasil diperbarui.');
     }
@@ -145,33 +129,45 @@ class DataLatih extends BaseController
         }
 
         $komoditas = $this->commodityCatalog->active();
-        $expectedHeaders = $this->csvHeaders($komoditas);
+        $expectedHeaders = $this->csvHeaders();
         $handle = fopen($file->getTempName(), 'rb');
         if ($handle === false) {
             return redirect()->to('/data-latih')->with('error', 'File CSV tidak dapat dibaca.');
         }
 
-        $header = fgetcsv($handle);
-        if ($header === false) {
+        $headerLine = fgets($handle);
+        if ($headerLine === false) {
             fclose($handle);
 
             return redirect()->to('/data-latih')->with('error', 'File CSV kosong.');
         }
 
+        $delimiter = $this->detectCsvDelimiter($headerLine);
+        $header = str_getcsv($headerLine, $delimiter);
         $normalizedHeader = array_map([$this, 'normalizeHeaderValue'], $header);
-        if ($normalizedHeader !== $expectedHeaders) {
+        $missingHeaders = array_values(array_diff($expectedHeaders, $normalizedHeader));
+        $unknownHeaders = array_values(array_diff($normalizedHeader, $expectedHeaders));
+        if ($missingHeaders !== [] || $unknownHeaders !== []) {
             fclose($handle);
+
+            $details = ['Gunakan header: ' . implode(', ', $expectedHeaders)];
+            if ($missingHeaders !== []) {
+                $details[] = 'Header kurang: ' . implode(', ', $missingHeaders);
+            }
+            if ($unknownHeaders !== []) {
+                $details[] = 'Header tidak dikenali: ' . implode(', ', $unknownHeaders);
+            }
 
             return redirect()->to('/data-latih')
                 ->with('error', 'Header CSV tidak sesuai format yang dibutuhkan.')
-                ->with('import_errors', ['Gunakan urutan header: ' . implode(', ', $expectedHeaders)]);
+                ->with('import_errors', $details);
         }
 
         $records = [];
         $errors = [];
         $rowNumber = 1;
 
-        while (($row = fgetcsv($handle)) !== false) {
+        while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
             $rowNumber++;
 
             if ($this->isRowEmpty($row)) {
@@ -183,11 +179,13 @@ class DataLatih extends BaseController
                 continue;
             }
 
-            $payload = array_combine($expectedHeaders, array_map('trim', $row));
+            $payload = array_combine($normalizedHeader, array_map('trim', $row));
             if ($payload === false) {
                 $errors[] = 'Baris ' . $rowNumber . ': gagal membaca data.';
                 continue;
             }
+
+            $payload = $this->normalizeImportPayload($payload, $komoditas);
 
             $validationErrors = $this->validateImportRow($payload, $komoditas);
             if ($validationErrors !== []) {
@@ -195,10 +193,7 @@ class DataLatih extends BaseController
                 continue;
             }
 
-            $records[] = [
-                'base'      => $this->basePayloadFromArray($payload),
-                'commodity' => $this->commodityPayloadFromArray($payload, $komoditas),
-            ];
+            $records[] = $this->basePayloadFromArray($payload, $komoditas);
         }
 
         fclose($handle);
@@ -214,7 +209,7 @@ class DataLatih extends BaseController
         }
 
         foreach ($records as $record) {
-            $this->persistDataLatih($record['base'], $record['commodity']);
+            $this->dataLatihModel->insert($record);
         }
 
         return redirect()->to('/data-latih')->with('success', count($records) . ' data latih berhasil diimpor.');
@@ -222,14 +217,13 @@ class DataLatih extends BaseController
 
     public function export()
     {
-        $komoditas = $this->commodityCatalog->active();
-        $headers = $this->csvHeaders($komoditas);
-        $rows = $this->attachCommodityLabels($this->dataLatihModel->orderBy('id', 'ASC')->findAll(), $komoditas);
+        $commodityMap = $this->commodityCatalog->idMap(false);
 
-        $lines = [implode(',', $headers)];
+        $rows = $this->dataLatihModel->orderBy('id', 'ASC')->findAll();
+        $lines = [implode(',', $this->csvHeaders())];
 
         foreach ($rows as $row) {
-            $values = [
+            $lines[] = $this->toCsvLine([
                 $row['kemiringan_lereng'],
                 $row['luas_lahan'],
                 $row['ph_tanah'],
@@ -237,13 +231,11 @@ class DataLatih extends BaseController
                 $row['ketinggian_tempat'],
                 $row['kedalaman_tanah'],
                 $row['curah_hujan'],
-            ];
-
-            foreach ($komoditas as $commodity) {
-                $values[] = $row['commodity_labels'][(int) $commodity['id']] ?? '';
-            }
-
-            $lines[] = $this->toCsvLine($values);
+                $row['irigasi'],
+                $commodityMap[(int) $row['komoditas_id']]['nama'] ?? '',
+                $row['latitude'],
+                $row['longitude'],
+            ]);
         }
 
         $filename = 'data-latih-' . date('Ymd-His') . '.csv';
@@ -253,40 +245,6 @@ class DataLatih extends BaseController
             ->setContentType('text/csv')
             ->setHeader('Content-Disposition', 'attachment; filename="' . $filename . '"')
             ->setBody(implode("\n", $lines));
-    }
-
-    private function persistDataLatih(array $basePayload, array $commodityPayload, ?int $id = null): void
-    {
-        $this->db->transStart();
-
-        if ($id === null) {
-            $id = (int) $this->dataLatihModel->insert($this->legacyAwarePayload($basePayload, $commodityPayload), true);
-        } else {
-            $this->dataLatihModel->update($id, $this->legacyAwarePayload($basePayload, $commodityPayload));
-            $this->dataLatihKomoditasModel->where('data_latih_id', $id)->delete();
-        }
-
-        foreach ($commodityPayload as $komoditasId => $kelas) {
-            $this->dataLatihKomoditasModel->insert([
-                'data_latih_id' => $id,
-                'komoditas_id'  => $komoditasId,
-                'kelas'         => $kelas,
-            ]);
-        }
-
-        $this->db->transComplete();
-    }
-
-    private function legacyAwarePayload(array $basePayload, array $commodityPayload): array
-    {
-        $slugMap = $this->commodityCatalog->slugMap();
-
-        return $basePayload + [
-            'kelas_tebu'   => $commodityPayload[$slugMap['tebu']['id'] ?? 0] ?? 'N',
-            'kelas_jagung' => $commodityPayload[$slugMap['jagung']['id'] ?? 0] ?? 'N',
-            'kelas_cabai'  => $commodityPayload[$slugMap['cabe']['id'] ?? 0] ?? 'N',
-            'kelas_padi'   => $commodityPayload[$slugMap['padi']['id'] ?? 0] ?? 'N',
-        ];
     }
 
     private function basePayload(): array
@@ -299,21 +257,23 @@ class DataLatih extends BaseController
             'ketinggian_tempat' => $this->request->getPost('ketinggian_tempat'),
             'kedalaman_tanah'   => $this->request->getPost('kedalaman_tanah'),
             'curah_hujan'       => $this->request->getPost('curah_hujan'),
+            'irigasi'           => $this->request->getPost('irigasi'),
+            'komoditas_id'      => (int) $this->request->getPost('komoditas_id'),
+            'latitude'          => $this->request->getPost('latitude'),
+            'longitude'         => $this->request->getPost('longitude'),
         ];
     }
 
-    private function commodityPayload(array $komoditas): array
+    /**
+     * @param array<int, array<string, mixed>> $komoditas
+     */
+    private function basePayloadFromArray(array $payload, array $komoditas): array
     {
-        $payload = [];
+        $nameMap = [];
         foreach ($komoditas as $commodity) {
-            $payload[(int) $commodity['id']] = (string) $this->request->getPost('kelas_' . $commodity['slug']);
+            $nameMap[mb_strtolower(trim((string) $commodity['nama']))] = (int) $commodity['id'];
         }
 
-        return $payload;
-    }
-
-    private function basePayloadFromArray(array $payload): array
-    {
         return [
             'kemiringan_lereng' => $payload['kemiringan_lereng'],
             'luas_lahan'        => $payload['luas_lahan'],
@@ -322,41 +282,46 @@ class DataLatih extends BaseController
             'ketinggian_tempat' => $payload['ketinggian_tempat'],
             'kedalaman_tanah'   => $payload['kedalaman_tanah'],
             'curah_hujan'       => $payload['curah_hujan'],
+            'irigasi'           => $payload['irigasi'],
+            'komoditas_id'      => $nameMap[mb_strtolower(trim((string) $payload['jenis_tanaman']))] ?? 0,
+            'latitude'          => $payload['latitude'],
+            'longitude'         => $payload['longitude'],
         ];
     }
 
-    private function commodityPayloadFromArray(array $payload, array $komoditas): array
+    /**
+     * @param array<int, array<string, mixed>> $komoditas
+     */
+    private function validationRules(array $komoditas, bool $forImport = false): array
     {
-        $rows = [];
-        foreach ($komoditas as $commodity) {
-            $rows[(int) $commodity['id']] = $payload['kelas_' . $commodity['slug']];
-        }
+        $komoditasIds = array_map(static fn(array $row): string => (string) $row['id'], $komoditas);
+        $komoditasNames = array_map(static fn(array $row): string => (string) $row['nama'], $komoditas);
 
-        return $rows;
-    }
-
-    private function validationRules(array $komoditas): array
-    {
         $rules = [
             'kemiringan_lereng' => 'required|decimal|greater_than_equal_to[0]',
             'luas_lahan'        => 'required|decimal|greater_than[0]',
             'ph_tanah'          => 'required|decimal|greater_than_equal_to[0]|less_than_equal_to[14]',
-            'jenis_tanah'       => 'required|in_list[' . implode(',', self::JENIS_TANAH_OPTIONS) . ']',
+            'jenis_tanah'       => 'required|in_list[' . implode(',', SoilTypeCatalog::all()) . ']',
             'ketinggian_tempat' => 'required|integer|greater_than_equal_to[0]',
             'kedalaman_tanah'   => 'required|integer|greater_than[0]',
             'curah_hujan'       => 'required|integer|greater_than[0]',
+            'irigasi'           => 'required|integer|greater_than_equal_to[0]',
+            'latitude'          => 'required|decimal|greater_than_equal_to[-90]|less_than_equal_to[90]',
+            'longitude'         => 'required|decimal|greater_than_equal_to[-180]|less_than_equal_to[180]',
         ];
 
-        foreach ($komoditas as $commodity) {
-            $rules['kelas_' . $commodity['slug']] = 'required|in_list[' . implode(',', self::KELAS_OPTIONS) . ']';
+        if ($forImport) {
+            $rules['jenis_tanaman'] = 'required|in_list[' . implode(',', $komoditasNames ?: ['']) . ']';
+        } else {
+            $rules['komoditas_id'] = 'required|in_list[' . implode(',', $komoditasIds ?: ['0']) . ']';
         }
 
         return $rules;
     }
 
-    private function validationMessages(array $komoditas): array
+    private function validationMessages(): array
     {
-        $messages = [
+        return [
             'kemiringan_lereng' => [
                 'required' => 'Kemiringan lereng wajib diisi.',
                 'decimal'  => 'Kemiringan lereng harus berupa angka desimal.',
@@ -386,21 +351,36 @@ class DataLatih extends BaseController
                 'required' => 'Curah hujan wajib diisi.',
                 'integer'  => 'Curah hujan harus berupa bilangan bulat.',
             ],
+            'irigasi' => [
+                'required' => 'Irigasi wajib diisi.',
+                'integer'  => 'Irigasi harus berupa bilangan bulat.',
+            ],
+            'komoditas_id' => [
+                'required' => 'Jenis tanaman wajib dipilih.',
+                'in_list'  => 'Jenis tanaman tidak valid.',
+            ],
+            'jenis_tanaman' => [
+                'required' => 'Jenis tanaman wajib dipilih.',
+                'in_list' => 'Jenis tanaman pada CSV harus sama dengan nama komoditas aktif.',
+            ],
+            'latitude' => [
+                'required'              => 'Latitude wajib diisi.',
+                'decimal'               => 'Latitude harus berupa angka desimal.',
+                'greater_than_equal_to' => 'Latitude minimal -90.',
+                'less_than_equal_to'    => 'Latitude maksimal 90.',
+            ],
+            'longitude' => [
+                'required'              => 'Longitude wajib diisi.',
+                'decimal'               => 'Longitude harus berupa angka desimal.',
+                'greater_than_equal_to' => 'Longitude minimal -180.',
+                'less_than_equal_to'    => 'Longitude maksimal 180.',
+            ],
         ];
-
-        foreach ($komoditas as $commodity) {
-            $messages['kelas_' . $commodity['slug']] = [
-                'required' => 'Kelas ' . $commodity['nama'] . ' wajib dipilih.',
-                'in_list'  => 'Kelas ' . $commodity['nama'] . ' tidak valid.',
-            ];
-        }
-
-        return $messages;
     }
 
-    private function csvHeaders(array $komoditas): array
+    private function csvHeaders(): array
     {
-        $headers = [
+        return [
             'kemiringan_lereng',
             'luas_lahan',
             'ph_tanah',
@@ -408,61 +388,194 @@ class DataLatih extends BaseController
             'ketinggian_tempat',
             'kedalaman_tanah',
             'curah_hujan',
+            'irigasi',
+            'jenis_tanaman',
+            'latitude',
+            'longitude',
         ];
-
-        foreach ($komoditas as $commodity) {
-            $headers[] = 'kelas_' . $commodity['slug'];
-        }
-
-        return $headers;
     }
 
-    private function attachCommodityLabels(array $rows, array $komoditas): array
-    {
-        $labelsById = $this->labelsByDataLatihId(array_map(static fn(array $row): int => (int) $row['id'], $rows));
-
-        foreach ($rows as &$row) {
-            $labels = $labelsById[(int) $row['id']] ?? [];
-            foreach ($komoditas as $commodity) {
-                $commodityId = (int) $commodity['id'];
-                $labels[$commodityId] = $labels[$commodityId] ?? 'N';
-            }
-            $row['commodity_labels'] = $labels;
-        }
-
-        return $rows;
-    }
-
-    private function labelsByDataLatihId(array $ids): array
-    {
-        if ($ids === []) {
-            return [];
-        }
-
-        $rows = $this->dataLatihKomoditasModel
-            ->whereIn('data_latih_id', $ids)
-            ->findAll();
-
-        $grouped = [];
-        foreach ($rows as $row) {
-            $grouped[(int) $row['data_latih_id']][(int) $row['komoditas_id']] = (string) $row['kelas'];
-        }
-
-        return $grouped;
-    }
-
+    /**
+     * @param array<int, array<string, mixed>> $komoditas
+     * @return array<string, string>
+     */
     private function validateImportRow(array $payload, array $komoditas): array
     {
         $validation = Services::validation();
-        $validation->setRules($this->validationRules($komoditas), $this->validationMessages($komoditas));
+        $validation->setRules($this->validationRules($komoditas, true), $this->validationMessages());
         $validation->run($payload);
 
         return $validation->getErrors();
     }
 
+    /**
+     * @param array<int, array<string, mixed>> $komoditas
+     * @return array<string, string>
+     */
+    private function normalizeImportPayload(array $payload, array $komoditas): array
+    {
+        if (isset($payload['jenis_tanah'])) {
+            $payload['jenis_tanah'] = $this->normalizeSoilType((string) $payload['jenis_tanah']);
+        }
+
+        if (isset($payload['jenis_tanaman'])) {
+            $payload['jenis_tanaman'] = $this->normalizeCommodityName((string) $payload['jenis_tanaman'], $komoditas);
+        }
+
+        foreach (['kemiringan_lereng', 'luas_lahan', 'ph_tanah', 'latitude', 'longitude'] as $decimalField) {
+            if (isset($payload[$decimalField])) {
+                $payload[$decimalField] = $this->normalizeDecimalValue((string) $payload[$decimalField]);
+            }
+        }
+
+        if (isset($payload['latitude'])) {
+            $payload['latitude'] = $this->normalizeCoordinateValue((string) $payload['latitude'], 90.0);
+        }
+
+        if (isset($payload['longitude'])) {
+            $payload['longitude'] = $this->normalizeCoordinateValue((string) $payload['longitude'], 180.0);
+        }
+
+        foreach (['ketinggian_tempat', 'kedalaman_tanah', 'curah_hujan', 'irigasi'] as $integerField) {
+            if (isset($payload[$integerField])) {
+                $payload[$integerField] = $this->normalizeIntegerValue((string) $payload[$integerField]);
+            }
+        }
+
+        return $payload;
+    }
+
+    private function normalizeSoilType(string $value): string
+    {
+        $normalizedInput = mb_strtolower(trim($value));
+
+        foreach (SoilTypeCatalog::all() as $option) {
+            if ($normalizedInput === mb_strtolower($option)) {
+                return $option;
+            }
+        }
+
+        return trim($value);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $komoditas
+     */
+    private function normalizeCommodityName(string $value, array $komoditas): string
+    {
+        $normalizedInput = mb_strtolower(trim($value));
+
+        foreach ($komoditas as $commodity) {
+            $name = trim((string) $commodity['nama']);
+            if ($normalizedInput === mb_strtolower($name)) {
+                return $name;
+            }
+        }
+
+        return trim($value);
+    }
+
     private function normalizeHeaderValue(string $value): string
     {
-        return strtolower(trim(str_replace("\xEF\xBB\xBF", '', $value)));
+        $normalized = strtolower(trim(str_replace("\xEF\xBB\xBF", '', $value)));
+
+        return match ($normalized) {
+            // Backward compatibility typo from older CSV templates
+            'kemiringan_lereng' => 'kemiringan_lereng',
+            'longtitude' => 'longitude',
+            default => $normalized,
+        };
+    }
+
+    private function normalizeDecimalValue(string $value): string
+    {
+        $normalized = trim(str_replace(',', '.', $value));
+        $normalized = preg_replace('/[^0-9.\-]/', '', $normalized) ?? '';
+        if ($normalized === '') {
+            return '';
+        }
+
+        $isNegative = str_starts_with($normalized, '-');
+        $body = $isNegative ? substr($normalized, 1) : $normalized;
+        $parts = explode('.', $body);
+
+        if (count($parts) <= 1) {
+            return $isNegative ? '-' . $body : $body;
+        }
+
+        $rebuilt = array_shift($parts) . '.' . implode('', $parts);
+
+        return $isNegative ? '-' . $rebuilt : $rebuilt;
+    }
+
+    private function normalizeIntegerValue(string $value): string
+    {
+        $normalized = preg_replace('/[^0-9\-]/', '', trim($value)) ?? '';
+        if ($normalized === '' || $normalized === '-') {
+            return '';
+        }
+
+        return $normalized;
+    }
+
+    private function normalizeCoordinateValue(string $value, float $maxAbs): string
+    {
+        $normalized = $this->normalizeDecimalValue($value);
+        if ($normalized === '' || ! is_numeric($normalized)) {
+            return $normalized;
+        }
+
+        $numeric = (float) $normalized;
+        if (abs($numeric) <= $maxAbs) {
+            return $normalized;
+        }
+
+        $candidates = [];
+        foreach ([10, 100, 1000, 10000] as $divisor) {
+            $candidate = $numeric / $divisor;
+            if (abs($candidate) <= $maxAbs) {
+                $candidates[] = $candidate;
+            }
+        }
+
+        if ($candidates === []) {
+            return $normalized;
+        }
+
+        if ($maxAbs === 90.0) {
+            foreach ($candidates as $candidate) {
+                if (abs($candidate) <= 20.0) {
+                    return rtrim(rtrim(sprintf('%.10F', $candidate), '0'), '.');
+                }
+            }
+        }
+
+        if ($maxAbs === 180.0) {
+            foreach ($candidates as $candidate) {
+                if (abs($candidate) >= 90.0) {
+                    return rtrim(rtrim(sprintf('%.10F', $candidate), '0'), '.');
+                }
+            }
+        }
+
+        return rtrim(rtrim(sprintf('%.10F', $candidates[0]), '0'), '.');
+    }
+
+    private function detectCsvDelimiter(string $line): string
+    {
+        $candidates = [',', ';', "\t"];
+        $bestDelimiter = ',';
+        $bestCount = -1;
+
+        foreach ($candidates as $candidate) {
+            $count = substr_count($line, $candidate);
+            if ($count > $bestCount) {
+                $bestCount = $count;
+                $bestDelimiter = $candidate;
+            }
+        }
+
+        return $bestDelimiter;
     }
 
     private function isRowEmpty(array $row): bool

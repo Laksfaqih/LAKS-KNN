@@ -9,7 +9,7 @@ $selectedJenisTanah = json_decode((string) ($nilaiKriteria['jenis_tanah_json'] ?
 <section class="page-header">
     <div>
         <h2><?= esc($formTitle) ?></h2>
-        <p>Lengkapi rentang acuan untuk semua parameter klasifikasi.</p>
+        <p>Lengkapi rentang acuan per komoditas dan per kelas kesesuaian.</p>
     </div>
     <a class="btn-inline btn-inline-secondary" href="<?= site_url('nilai-kriteria') ?>">Kembali</a>
 </section>
@@ -37,6 +37,21 @@ $selectedJenisTanah = json_decode((string) ($nilaiKriteria['jenis_tanah_json'] ?
             <?php endif; ?>
         </div>
 
+        <div class="group-input">
+            <label for="kelas">Kelas</label>
+            <select id="kelas" name="kelas" required>
+                <option value="">Pilih kelas</option>
+                <?php foreach ($kelasOptions as $option): ?>
+                    <option value="<?= esc($option) ?>" <?= old('kelas', (string) ($nilaiKriteria['kelas'] ?? '')) === $option ? 'selected' : '' ?>>
+                        <?= esc($option) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <?php if ($validation->hasError('kelas')): ?>
+                <small class="field-error"><?= esc($validation->getError('kelas')) ?></small>
+            <?php endif; ?>
+        </div>
+
         <?php foreach ([
             'kemiringan' => 'Kemiringan Lereng',
             'luas' => 'Luas Lahan',
@@ -44,6 +59,7 @@ $selectedJenisTanah = json_decode((string) ($nilaiKriteria['jenis_tanah_json'] ?
             'ketinggian' => 'Ketinggian',
             'kedalaman' => 'Kedalaman',
             'curah_hujan' => 'Curah Hujan',
+            'irigasi' => 'Irigasi (m)',
         ] as $prefix => $label): ?>
             <div class="range-group">
                 <label><?= esc($label) ?></label>

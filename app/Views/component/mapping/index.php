@@ -13,7 +13,7 @@
 <section class="page-header">
     <div>
         <h2>Mapping</h2>
-        <p>Warna area mewakili komoditas rekomendasi, popup menampilkan semua hasil komoditas.</p>
+        <p>Warna area mewakili rekomendasi KNN, popup menampilkan evaluasi kelas semua komoditas.</p>
     </div>
 </section>
 
@@ -66,7 +66,7 @@
             layer.bindPopup(`
                 <div class="map-popup">
                     <h4>${item.nama_lahan || 'Tanpa nama'}</h4>
-                    <p><strong>Rekomendasi:</strong> ${item.rekomendasi_komoditas}</p>
+                    <p><strong>Rekomendasi KNN:</strong> ${item.rekomendasi_komoditas}</p>
                     <p><strong>Jenis Tanah:</strong> ${item.jenis_tanah}</p>
                     <p><strong>Lereng:</strong> ${item.kemiringan_lereng}%</p>
                     <p><strong>Luas:</strong> ${item.luas_lahan} Ha</p>
