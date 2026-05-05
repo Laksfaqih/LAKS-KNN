@@ -57,6 +57,7 @@
                 <thead>
                     <tr>
                         <th>No</th>
+                        <th>Jenis Tanaman</th>
                         <th>Kemiringan</th>
                         <th>Luas</th>
                         <th>pH</th>
@@ -64,9 +65,9 @@
                         <th>Ketinggian</th>
                         <th>Kedalaman</th>
                         <th>Curah Hujan</th>
-                        <?php foreach ($komoditas as $commodity): ?>
-                            <th><?= esc($commodity['nama']) ?></th>
-                        <?php endforeach; ?>
+                        <th>Irigasi</th>
+                        <th>Latitude</th>
+                        <th>Longitude</th>
                         <th>Aksi</th>
                     </tr>
                 </thead>
@@ -75,6 +76,7 @@
                     <?php foreach ($dataLatih as $row): ?>
                         <tr>
                             <td><?= esc((string) $nomor++) ?></td>
+                            <td><span class="badge"><?= esc($row['nama_komoditas']) ?></span></td>
                             <td><?= esc(number_format((float) $row['kemiringan_lereng'], 2)) ?>%</td>
                             <td><?= esc(number_format((float) $row['luas_lahan'], 2)) ?> Ha</td>
                             <td><?= esc(number_format((float) $row['ph_tanah'], 2)) ?></td>
@@ -82,9 +84,9 @@
                             <td><?= esc((string) $row['ketinggian_tempat']) ?> mdpl</td>
                             <td><?= esc((string) $row['kedalaman_tanah']) ?> cm</td>
                             <td><?= esc((string) $row['curah_hujan']) ?> mm</td>
-                            <?php foreach ($komoditas as $commodity): ?>
-                                <td><span class="badge"><?= esc($row['commodity_labels'][(int) $commodity['id']] ?? 'N') ?></span></td>
-                            <?php endforeach; ?>
+                            <td><?= esc((string) ($row['irigasi'] ?? '-')) ?> m</td>
+                            <td><?= esc(number_format((float) $row['latitude'], 8)) ?></td>
+                            <td><?= esc(number_format((float) $row['longitude'], 8)) ?></td>
                             <td>
                                 <div class="table-actions">
                                     <a class="link-edit" href="<?= site_url('data-latih/' . $row['id'] . '/edit') ?>">Edit</a>

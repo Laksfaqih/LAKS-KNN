@@ -24,7 +24,7 @@ class Mapping extends BaseController
             ->getResultArray();
 
         $details = $this->db->table('hasil_klasifikasi_detail hd')
-            ->select('hd.hasil_klasifikasi_id, hd.kelas, k.nama, k.slug, k.warna_peta')
+            ->select('hd.hasil_klasifikasi_id, hd.kelas, k.nama, k.warna_peta')
             ->join('komoditas k', 'k.id = hd.komoditas_id')
             ->orderBy('k.urutan_tampil', 'ASC')
             ->get()

@@ -31,15 +31,4 @@ class CommodityCatalog
 
         return $map;
     }
-
-    public function slugMap(bool $onlyActive = true): array
-    {
-        $rows = $onlyActive ? $this->active() : $this->all();
-        $map = [];
-        foreach ($rows as $row) {
-            $map[(string) $row['slug']] = $row;
-        }
-
-        return $map;
-    }
 }

@@ -13,10 +13,6 @@ class HasilKlasifikasiModel extends Model
     protected $protectFields    = true;
     protected $allowedFields    = [
         'data_uji_id',
-        'kelas_tebu',
-        'kelas_cabai',
-        'kelas_jagung',
-        'kelas_padi',
         'rekomendasi_komoditas',
         'komoditas_rekomendasi_id',
         'nilai_k',

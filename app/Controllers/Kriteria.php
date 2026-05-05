@@ -93,7 +93,6 @@ class Kriteria extends BaseController
     {
         return [
             'nama'          => trim((string) $this->request->getPost('nama')),
-            'slug'          => trim((string) $this->request->getPost('slug')),
             'warna_peta'    => trim((string) $this->request->getPost('warna_peta')),
             'urutan_tampil' => (int) $this->request->getPost('urutan_tampil'),
             'is_active'     => $this->request->getPost('is_active') === '1' ? 1 : 0,
@@ -102,14 +101,8 @@ class Kriteria extends BaseController
 
     private function rules(?int $id = null): array
     {
-        $slugRule = 'required|alpha_dash|max_length[100]|is_unique[komoditas.slug]';
-        if ($id !== null) {
-            $slugRule = 'required|alpha_dash|max_length[100]|is_unique[komoditas.slug,id,' . $id . ']';
-        }
-
         return [
             'nama'          => 'required|max_length[100]',
-            'slug'          => $slugRule,
             'warna_peta'    => 'required|regex_match[/^#[A-Fa-f0-9]{6}$/]',
             'urutan_tampil' => 'required|integer|greater_than_equal_to[1]',
         ];
@@ -119,11 +112,6 @@ class Kriteria extends BaseController
     {
         return [
             'nama' => ['required' => 'Nama kriteria wajib diisi.'],
-            'slug' => [
-                'required'   => 'Slug wajib diisi.',
-                'alpha_dash' => 'Slug hanya boleh huruf, angka, dash, dan underscore.',
-                'is_unique'  => 'Slug sudah digunakan.',
-            ],
             'warna_peta' => [
                 'required'    => 'Warna peta wajib diisi.',
                 'regex_match' => 'Warna peta harus berupa hex color, contoh #4CAF50.',

@@ -3,21 +3,14 @@
 namespace App\Controllers;
 
 use App\Libraries\CommodityCatalog;
+use App\Libraries\SoilTypeCatalog;
 use App\Models\NilaiKriteriaModel;
 use CodeIgniter\Exceptions\PageNotFoundException;
+use CodeIgniter\HTTP\Files\UploadedFile;
 
 class NilaiKriteria extends BaseController
 {
-    private const JENIS_TANAH_OPTIONS = [
-        'Aluvial',
-        'Andosol',
-        'Grumosol',
-        'Latosol',
-        'Mediteran',
-        'Organosol',
-        'Podsolik',
-        'Regosol',
-    ];
+    private const CLASS_OPTIONS = ['S1', 'S2', 'S3', 'N'];
 
     private NilaiKriteriaModel $nilaiKriteriaModel;
     private CommodityCatalog $commodityCatalog;
@@ -31,9 +24,10 @@ class NilaiKriteria extends BaseController
     public function index()
     {
         $rows = $this->db->table('nilai_kriteria nk')
-            ->select('nk.*, k.nama AS nama_komoditas, k.slug, k.warna_peta')
+            ->select('nk.*, k.nama AS nama_komoditas, k.warna_peta')
             ->join('komoditas k', 'k.id = nk.komoditas_id')
             ->orderBy('k.urutan_tampil', 'ASC')
+            ->orderBy('FIELD(nk.kelas, "S1", "S2", "S3", "N")', '', false)
             ->get()
             ->getResultArray();
 
@@ -52,7 +46,8 @@ class NilaiKriteria extends BaseController
             'submitLabel'       => 'Simpan Nilai',
             'nilaiKriteria'     => null,
             'komoditasOptions'  => $this->commodityCatalog->all(),
-            'jenisTanahOptions' => self::JENIS_TANAH_OPTIONS,
+            'kelasOptions'      => self::CLASS_OPTIONS,
+            'jenisTanahOptions' => SoilTypeCatalog::all(),
             'validation'        => service('validation'),
         ]);
     }
@@ -82,7 +77,8 @@ class NilaiKriteria extends BaseController
             'submitLabel'       => 'Perbarui Nilai',
             'nilaiKriteria'     => $nilaiKriteria,
             'komoditasOptions'  => $this->commodityCatalog->all(),
-            'jenisTanahOptions' => self::JENIS_TANAH_OPTIONS,
+            'kelasOptions'      => self::CLASS_OPTIONS,
+            'jenisTanahOptions' => SoilTypeCatalog::all(),
             'validation'        => service('validation'),
         ]);
     }
@@ -113,12 +109,120 @@ class NilaiKriteria extends BaseController
         return redirect()->to('/nilai-kriteria')->with('success', 'Nilai kriteria berhasil dihapus.');
     }
 
+    public function import()
+    {
+        $file = $this->request->getFile('nilai_kriteria_csv');
+        if (! $file instanceof UploadedFile || ! $file->isValid()) {
+            return redirect()->to('/nilai-kriteria')->with('error', 'File CSV wajib dipilih.');
+        }
+
+        if (strtolower($file->getExtension()) !== 'csv') {
+            return redirect()->to('/nilai-kriteria')->with('error', 'Format file harus CSV.');
+        }
+
+        $handle = fopen($file->getTempName(), 'rb');
+        if ($handle === false) {
+            return redirect()->to('/nilai-kriteria')->with('error', 'File CSV tidak dapat dibaca.');
+        }
+
+        $commodityMap = [];
+        foreach ($this->commodityCatalog->all() as $commodity) {
+            $normalizedName = mb_strtolower(trim((string) $commodity['nama']));
+            $commodityMap[$normalizedName] = (int) $commodity['id'];
+            if ($normalizedName === 'cabe') {
+                $commodityMap['cabai'] = (int) $commodity['id'];
+            }
+        }
+
+        $rows = [];
+        $currentCommodityId = null;
+
+        while (($row = fgetcsv($handle, 0, ',')) !== false) {
+            $cells = array_map(static fn(mixed $cell): string => trim((string) $cell), $row);
+            $first = mb_strtolower($cells[0] ?? '');
+            if ($first === '') {
+                continue;
+            }
+
+            if ($first === 'lereng') {
+                continue;
+            }
+
+            if (($cells[1] ?? '') === '' && isset($commodityMap[$first])) {
+                $currentCommodityId = $commodityMap[$first];
+                continue;
+            }
+
+            if ($currentCommodityId === null || count($cells) < 9) {
+                continue;
+            }
+
+            $kelas = strtoupper(trim((string) ($cells[8] ?? '')));
+            if (! in_array($kelas, self::CLASS_OPTIONS, true)) {
+                continue;
+            }
+
+            [$kemMin, $kemMax] = $this->parseRangeDecimal($cells[0] ?? '');
+            [$ketMin, $ketMax] = $this->parseRangeInt($cells[1] ?? '');
+            [$curMin, $curMax] = $this->parseRangeInt($cells[2] ?? '');
+            [$phMin, $phMax] = $this->parseRangeDecimal($cells[3] ?? '');
+            [$luasMin, $luasMax] = $this->parseRangeAreaHa($cells[5] ?? '');
+            [$kedMin, $kedMax] = $this->parseRangeInt($cells[6] ?? '');
+            [$iriMin, $iriMax] = $this->parseRangeInt($cells[7] ?? '');
+
+            $soil = $this->normalizeSoilTypeLabel($cells[4] ?? '');
+            $soilJson = $soil === '' ? json_encode([]) : json_encode([$soil], JSON_UNESCAPED_UNICODE);
+
+            $rows[] = [
+                'komoditas_id'     => $currentCommodityId,
+                'kelas'            => $kelas,
+                'kemiringan_min'   => $kemMin,
+                'kemiringan_max'   => $kemMax,
+                'luas_min'         => $luasMin,
+                'luas_max'         => $luasMax,
+                'ph_min'           => $phMin,
+                'ph_max'           => $phMax,
+                'ketinggian_min'   => $ketMin,
+                'ketinggian_max'   => $ketMax,
+                'kedalaman_min'    => $kedMin,
+                'kedalaman_max'    => $kedMax,
+                'curah_hujan_min'  => $curMin,
+                'curah_hujan_max'  => $curMax,
+                'irigasi_min'      => $iriMin,
+                'irigasi_max'      => $iriMax,
+                'jenis_tanah_json' => $soilJson,
+                'catatan'          => 'import_csv',
+            ];
+        }
+
+        fclose($handle);
+
+        if ($rows === []) {
+            return redirect()->to('/nilai-kriteria')->with('error', 'Tidak ada baris valid yang bisa diimport dari CSV.');
+        }
+
+        foreach ($rows as $payload) {
+            $existing = $this->nilaiKriteriaModel
+                ->where('komoditas_id', (int) $payload['komoditas_id'])
+                ->where('kelas', (string) $payload['kelas'])
+                ->first();
+
+            if ($existing !== null) {
+                $this->nilaiKriteriaModel->update((int) $existing['id'], $payload);
+                continue;
+            }
+
+            $this->nilaiKriteriaModel->insert($payload);
+        }
+
+        return redirect()->to('/nilai-kriteria')->with('success', count($rows) . ' baris nilai kriteria berhasil diimport.');
+    }
+
     private function payload(): array
     {
-        $jenisTanah = $this->request->getPost('jenis_tanah');
-
         return [
             'komoditas_id'     => (int) $this->request->getPost('komoditas_id'),
+            'kelas'            => trim((string) $this->request->getPost('kelas')),
             'kemiringan_min'   => $this->normalizeOptionalDecimal('kemiringan_min'),
             'kemiringan_max'   => $this->normalizeOptionalDecimal('kemiringan_max'),
             'luas_min'         => $this->normalizeOptionalDecimal('luas_min'),
@@ -131,20 +235,28 @@ class NilaiKriteria extends BaseController
             'kedalaman_max'    => $this->normalizeOptionalInt('kedalaman_max'),
             'curah_hujan_min'  => $this->normalizeOptionalInt('curah_hujan_min'),
             'curah_hujan_max'  => $this->normalizeOptionalInt('curah_hujan_max'),
-            'jenis_tanah_json' => json_encode(is_array($jenisTanah) ? array_values($jenisTanah) : [], JSON_UNESCAPED_UNICODE),
+            'irigasi_min'      => $this->normalizeOptionalInt('irigasi_min'),
+            'irigasi_max'      => $this->normalizeOptionalInt('irigasi_max'),
+            'jenis_tanah_json' => json_encode($this->normalizedJenisTanahSelection(), JSON_UNESCAPED_UNICODE),
             'catatan'          => trim((string) $this->request->getPost('catatan')),
         ];
     }
 
     private function rules(?int $id = null): array
     {
-        $uniqueRule = 'required|integer|is_unique[nilai_kriteria.komoditas_id]';
-        if ($id !== null) {
-            $uniqueRule = 'required|integer|is_unique[nilai_kriteria.komoditas_id,id,' . $id . ']';
-        }
-
         return [
-            'komoditas_id'    => $uniqueRule,
+            'komoditas_id'    => 'required|integer',
+            'kelas'           => [
+                'rules' => [
+                    'required',
+                    'in_list[' . implode(',', self::CLASS_OPTIONS) . ']',
+                    fn($value, array $data, ?string &$error) => $this->isUniqueCommodityClassPair($data, $id, $error),
+                ],
+                'errors' => [
+                    'required' => 'Kelas wajib dipilih.',
+                    'in_list'  => 'Kelas tidak valid.',
+                ],
+            ],
             'kemiringan_min'  => 'permit_empty|decimal',
             'kemiringan_max'  => 'permit_empty|decimal',
             'luas_min'        => 'permit_empty|decimal',
@@ -157,6 +269,37 @@ class NilaiKriteria extends BaseController
             'kedalaman_max'   => 'permit_empty|integer',
             'curah_hujan_min' => 'permit_empty|integer',
             'curah_hujan_max' => 'permit_empty|integer',
+            'irigasi_min'     => 'permit_empty|integer',
+            'irigasi_max'     => 'permit_empty|integer',
+            'jenis_tanah'     => [
+                'rules' => [
+                    static function ($value, array $data, ?string &$error, string $field): bool {
+                        if ($value === null || $value === '' || $value === []) {
+                            return true;
+                        }
+
+                        if (! is_array($value)) {
+                            $error = 'Jenis tanah tidak valid.';
+
+                            return false;
+                        }
+
+                        $allowed = SoilTypeCatalog::all();
+                        foreach ($value as $item) {
+                            if (! in_array((string) $item, $allowed, true)) {
+                                $error = 'Jenis tanah tidak valid.';
+
+                                return false;
+                            }
+                        }
+
+                        return true;
+                    },
+                ],
+                'errors' => [
+                    'rules' => 'Jenis tanah tidak valid.',
+                ],
+            ],
         ];
     }
 
@@ -164,10 +307,61 @@ class NilaiKriteria extends BaseController
     {
         return [
             'komoditas_id' => [
-                'required'  => 'Komoditas wajib dipilih.',
-                'is_unique' => 'Komoditas ini sudah memiliki nilai kriteria.',
+                'required' => 'Komoditas wajib dipilih.',
+                'integer'  => 'Komoditas tidak valid.',
             ],
         ];
+    }
+
+    private function isUniqueCommodityClassPair(array $data, ?int $ignoreId, ?string &$error): bool
+    {
+        $komoditasId = (int) ($data['komoditas_id'] ?? 0);
+        $kelas = trim((string) ($data['kelas'] ?? ''));
+
+        if ($komoditasId === 0 || $kelas === '') {
+            return true;
+        }
+
+        $builder = $this->nilaiKriteriaModel
+            ->where('komoditas_id', $komoditasId)
+            ->where('kelas', $kelas);
+
+        if ($ignoreId !== null) {
+            $builder->where('id !=', $ignoreId);
+        }
+
+        if ($builder->first() !== null) {
+            $error = 'Kombinasi komoditas dan kelas sudah ada.';
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizedJenisTanahSelection(): array
+    {
+        $jenisTanah = $this->request->getPost('jenis_tanah');
+        if (! is_array($jenisTanah)) {
+            return [];
+        }
+
+        $allowed = SoilTypeCatalog::all();
+        $normalized = [];
+
+        foreach ($jenisTanah as $item) {
+            $item = trim((string) $item);
+            if ($item === '' || ! in_array($item, $allowed, true)) {
+                continue;
+            }
+
+            $normalized[$item] = $item;
+        }
+
+        return array_values($normalized);
     }
 
     private function normalizeOptionalDecimal(string $key): ?string
@@ -182,5 +376,123 @@ class NilaiKriteria extends BaseController
         $value = trim((string) $this->request->getPost($key));
 
         return $value === '' ? null : (int) $value;
+    }
+
+    /**
+     * @return array{0: ?float, 1: ?float}
+     */
+    private function parseRangeDecimal(string $raw): array
+    {
+        return $this->parseRange($raw, true, false);
+    }
+
+    /**
+     * @return array{0: ?int, 1: ?int}
+     */
+    private function parseRangeInt(string $raw): array
+    {
+        [$min, $max] = $this->parseRange($raw, false, false);
+
+        return [
+            $min !== null ? (int) round($min) : null,
+            $max !== null ? (int) round($max) : null,
+        ];
+    }
+
+    /**
+     * @return array{0: ?float, 1: ?float}
+     */
+    private function parseRangeAreaHa(string $raw): array
+    {
+        return $this->parseRange($raw, true, true);
+    }
+
+    /**
+     * @return array{0: ?float, 1: ?float}
+     */
+    private function parseRange(string $raw, bool $decimal, bool $area): array
+    {
+        $text = mb_strtolower(trim($raw));
+        if ($text === '' || (str_contains($text, '<') && str_contains($text, '>') && str_contains($text, '/'))) {
+            return [null, null];
+        }
+
+        $numberSource = $text;
+        if (! str_contains($text, '<') && ! str_contains($text, '>')) {
+            // Treat "-" as range separator, not negative sign.
+            $numberSource = str_replace('-', ' ', $text);
+        }
+
+        preg_match_all('/\d[\d\.,]*/', $numberSource, $matches);
+        $isSquareMeter = $area && str_contains($text, 'm2');
+        $numbers = array_values(array_filter(array_map(
+            fn(string $token): ?float => $this->toNumber($token, $decimal, $isSquareMeter),
+            $matches[0] ?? [],
+        ), static fn($v): bool => $v !== null));
+
+        if ($numbers === []) {
+            return [null, null];
+        }
+
+        if (str_contains($text, '<') && ! str_contains($text, '>')) {
+            return [null, $numbers[0]];
+        }
+
+        if (str_contains($text, '>') && ! str_contains($text, '<')) {
+            return [$numbers[0], null];
+        }
+
+        if (count($numbers) >= 2) {
+            return [min($numbers[0], $numbers[1]), max($numbers[0], $numbers[1])];
+        }
+
+        return [$numbers[0], $numbers[0]];
+    }
+
+    private function toNumber(string $token, bool $decimal, bool $isSquareMeter): ?float
+    {
+        $value = trim($token);
+        if ($value === '') {
+            return null;
+        }
+
+        if ($decimal) {
+            if (str_contains($value, ',') && ! str_contains($value, '.')) {
+                $value = str_replace(',', '.', $value);
+            } elseif (! str_contains($value, ',') && str_contains($value, '.')) {
+                $parts = explode('.', $value);
+                if (count($parts) > 2 || (isset($parts[1]) && strlen($parts[1]) === 3)) {
+                    $value = str_replace('.', '', $value);
+                }
+            } else {
+                $value = str_replace('.', '', $value);
+                $value = str_replace(',', '.', $value);
+            }
+        } else {
+            $value = str_replace(['.', ','], '', $value);
+        }
+
+        $numeric = is_numeric($value) ? (float) $value : null;
+        if ($numeric === null) {
+            return null;
+        }
+
+        if ($isSquareMeter) {
+            return $numeric / 10000;
+        }
+
+        return $numeric;
+    }
+
+    private function normalizeSoilTypeLabel(string $value): string
+    {
+        $needle = mb_strtolower(trim($value));
+        foreach (SoilTypeCatalog::all() as $soil) {
+            if ($needle === mb_strtolower($soil)) {
+                return $soil;
+            }
+        }
+
+        return '';
     }
 }

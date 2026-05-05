@@ -13,6 +13,7 @@ class NilaiKriteriaModel extends Model
     protected $protectFields    = true;
     protected $allowedFields    = [
         'komoditas_id',
+        'kelas',
         'kemiringan_min',
         'kemiringan_max',
         'luas_min',
@@ -25,6 +26,8 @@ class NilaiKriteriaModel extends Model
         'kedalaman_max',
         'curah_hujan_min',
         'curah_hujan_max',
+        'irigasi_min',
+        'irigasi_max',
         'jenis_tanah_json',
         'catatan',
     ];
