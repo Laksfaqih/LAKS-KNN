@@ -326,7 +326,16 @@ class RefactorDynamicCommodityAndPolygonSchema extends Migration
 
     private function migrateOldPointToPolygon(): void
     {
-        if (! $this->db->fieldExists('polygon_geojson', 'data_uji')) {
+        if (! $this->db->tableExists('data_uji')) {
+            return;
+        }
+
+        $fields = $this->db->getFieldNames('data_uji');
+        if (
+            ! in_array('polygon_geojson', $fields, true)
+            || ! in_array('latitude', $fields, true)
+            || ! in_array('longitude', $fields, true)
+        ) {
             return;
         }
 

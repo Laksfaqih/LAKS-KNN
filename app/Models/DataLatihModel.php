@@ -31,15 +31,15 @@ class DataLatihModel extends Model
     protected array $casts = [
         'id'                => 'integer',
         'kemiringan_lereng' => 'float',
-        'luas_lahan'        => 'float',
+        'luas_lahan'        => '?float',
         'ph_tanah'          => 'float',
         'ketinggian_tempat' => 'integer',
         'kedalaman_tanah'   => 'integer',
         'curah_hujan'       => 'integer',
         'irigasi'           => 'integer',
         'komoditas_id'      => 'integer',
-        'latitude'          => 'float',
-        'longitude'         => 'float',
+        'latitude'          => '?float',
+        'longitude'         => '?float',
     ];
 
     public function ordered(): self

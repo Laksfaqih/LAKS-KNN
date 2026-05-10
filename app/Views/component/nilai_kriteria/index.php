@@ -4,7 +4,8 @@
 <section class="page-header">
     <div>
         <h2>Nilai Kriteria</h2>
-        <p>Rentang acuan komoditas untuk referensi admin dan dokumentasi.</p>
+        <p>Rentang acuan komoditas untuk referensi admin dan dokumentasi. Import CSV akan mengganti nilai kriteria lama untuk komoditas yang ada di file.</p>
+        <code class="code-inline"><?= esc(implode(', ', $supportedKriteriaCsvHeader ?? [])) ?></code>
     </div>
     <div class="page-actions">
         <form action="<?= site_url('nilai-kriteria/import') ?>" method="post" enctype="multipart/form-data" style="display:inline-flex;gap:8px;align-items:center;">
@@ -31,7 +32,6 @@
                     <th>Komoditas</th>
                     <th>Kelas</th>
                     <th>Lereng</th>
-                    <th>Luas</th>
                     <th>pH</th>
                     <th>Ketinggian</th>
                     <th>Kedalaman</th>
@@ -44,7 +44,7 @@
             <tbody>
                 <?php if ($nilaiKriteria === []): ?>
                     <tr>
-                        <td colspan="11">
+                        <td colspan="10">
                             <div class="empty-state compact-empty">
                                 <p>Belum ada nilai kriteria.</p>
                             </div>
@@ -63,7 +63,6 @@
                         </td>
                         <td><span class="badge"><?= esc($row['kelas']) ?></span></td>
                         <td><?= esc(($row['kemiringan_min'] ?? '-') . ' - ' . ($row['kemiringan_max'] ?? '-')) ?></td>
-                        <td><?= esc(($row['luas_min'] ?? '-') . ' - ' . ($row['luas_max'] ?? '-')) ?></td>
                         <td><?= esc(($row['ph_min'] ?? '-') . ' - ' . ($row['ph_max'] ?? '-')) ?></td>
                         <td><?= esc(($row['ketinggian_min'] ?? '-') . ' - ' . ($row['ketinggian_max'] ?? '-')) ?></td>
                         <td><?= esc(($row['kedalaman_min'] ?? '-') . ' - ' . ($row['kedalaman_max'] ?? '-')) ?></td>

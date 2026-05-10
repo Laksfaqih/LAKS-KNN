@@ -64,7 +64,6 @@ class SuitabilityClassEvaluator
     {
         $numericPairs = [
             ['kemiringan_lereng', 'kemiringan_min', 'kemiringan_max'],
-            ['luas_lahan', 'luas_min', 'luas_max'],
             ['ph_tanah', 'ph_min', 'ph_max'],
             ['ketinggian_tempat', 'ketinggian_min', 'ketinggian_max'],
             ['kedalaman_tanah', 'kedalaman_min', 'kedalaman_max'],

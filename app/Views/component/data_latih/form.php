@@ -9,7 +9,7 @@ $validation = $validation ?? service('validation');
 <section class="page-header">
     <div>
         <h2><?= esc($formTitle) ?></h2>
-        <p>Lengkapi parameter lahan, jenis tanaman, dan titik koordinat lokasi untuk satu data latih.</p>
+        <p>Lengkapi data mentah lahan dan simpan kelas target secara terpisah untuk satu data latih.</p>
     </div>
     <a class="btn-inline btn-inline-secondary" href="<?= site_url('data-latih') ?>">Kembali</a>
 </section>
@@ -39,14 +39,11 @@ $validation = $validation ?? service('validation');
 
         <?php foreach ([
             'kemiringan_lereng' => ['Kemiringan Lereng (%)', 'number', '0.01'],
-            'luas_lahan' => ['Luas Lahan (Ha)', 'number', '0.01'],
             'ph_tanah' => ['pH Tanah', 'number', '0.01'],
             'ketinggian_tempat' => ['Ketinggian Tempat (mdpl)', 'number', '1'],
             'kedalaman_tanah' => ['Kedalaman Tanah (cm)', 'number', '1'],
             'curah_hujan' => ['Curah Hujan (mm/tahun)', 'number', '1'],
             'irigasi' => ['Irigasi (m)', 'number', '1'],
-            'latitude' => ['Latitude', 'number', '0.00000001'],
-            'longitude' => ['Longitude', 'number', '0.00000001'],
         ] as $field => [$label, $type, $step]): ?>
             <div class="group-input">
                 <label for="<?= esc($field) ?>"><?= esc($label) ?></label>
@@ -69,6 +66,21 @@ $validation = $validation ?? service('validation');
             </select>
             <?php if ($validation->hasError('jenis_tanah')): ?>
                 <small class="field-error"><?= esc($validation->getError('jenis_tanah')) ?></small>
+            <?php endif; ?>
+        </div>
+
+        <div class="group-input">
+            <label for="kelas">Kelas</label>
+            <select id="kelas" name="kelas" required>
+                <option value="">Pilih kelas</option>
+                <?php foreach ($kelasOptions as $option): ?>
+                    <option value="<?= esc($option) ?>" <?= old('kelas', $currentData['kelas'] ?? '') === $option ? 'selected' : '' ?>>
+                        <?= esc($option) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <?php if ($validation->hasError('kelas')): ?>
+                <small class="field-error"><?= esc($validation->getError('kelas')) ?></small>
             <?php endif; ?>
         </div>
 

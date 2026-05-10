@@ -14,7 +14,7 @@
 <section class="page-header">
     <div>
         <h2>Klasifikasi</h2>
-        <p>Input parameter lahan dan gambar area/poligon untuk memproses klasifikasi.</p>
+        <p>Pilih tanaman target, input parameter manual lahan, lalu sistem akan menghitung kelas dengan rumus KNN spreadsheet manual.</p>
     </div>
 </section>
 
@@ -28,7 +28,7 @@
 
 <section class="card-section">
     <div class="info-banner">
-        <strong>Total data latih aktif:</strong> <?= esc((string) $totalDataLatih) ?> data
+        <strong>Total data latih aktif:</strong> <?= esc((string) $totalDataLatih) ?> data. Tetangga KNN diambil dari seluruh data latih lintas tanaman.
     </div>
 
     <?php if ($validation->getErrors() !== []): ?>
@@ -39,6 +39,21 @@
 
     <form class="classification-form" action="<?= site_url('klasifikasi') ?>" method="post">
         <div class="classification-fields">
+            <div class="group-input">
+                <label for="komoditas_id">Tanaman</label>
+                <select id="komoditas_id" name="komoditas_id" required>
+                    <option value="">Pilih tanaman</option>
+                    <?php foreach ($komoditasOptions as $commodity): ?>
+                        <option value="<?= esc((string) $commodity['id']) ?>" <?= old('komoditas_id') === (string) $commodity['id'] ? 'selected' : '' ?>>
+                            <?= esc($commodity['nama']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <?php if ($validation->hasError('komoditas_id')): ?>
+                    <small class="field-error"><?= esc($validation->getError('komoditas_id')) ?></small>
+                <?php endif; ?>
+            </div>
+
             <div class="group-input">
                 <label for="latitude">Latitude</label>
                 <input id="latitude" name="latitude" type="number" step="0.00000001" value="<?= esc(old('latitude')) ?>" required>
@@ -66,13 +81,12 @@
                 'curah_hujan' => ['Curah Hujan (mm/tahun)', 'number', '1'],
                 'irigasi' => ['Irigasi (m)', 'number', '1'],
                 'ph_tanah' => ['pH Tanah', 'number', '0.01'],
-                'luas_lahan' => ['Luas Lahan (Ha)', 'number', '0.01'],
                 'kedalaman_tanah' => ['Kedalaman (cm)', 'number', '1'],
                 'nilai_k' => ['Nilai K', 'number', '1'],
             ] as $field => [$label, $type, $step]): ?>
                 <div class="group-input">
                     <label for="<?= esc($field) ?>"><?= esc($label) ?></label>
-                    <input id="<?= esc($field) ?>" name="<?= esc($field) ?>" type="<?= esc($type) ?>" step="<?= esc($step) ?>" value="<?= esc(old($field, $field === 'nilai_k' ? '3' : '')) ?>" required>
+                    <input id="<?= esc($field) ?>" name="<?= esc($field) ?>" type="<?= esc($type) ?>" step="<?= esc($step) ?>" value="<?= esc(old($field, $field === 'nilai_k' ? '31' : '')) ?>" required>
                     <?php if ($validation->hasError($field)): ?>
                         <small class="field-error"><?= esc($validation->getError($field)) ?></small>
                     <?php endif; ?>
@@ -103,6 +117,7 @@
             <button class="btn-submit" type="submit">Proses Klasifikasi</button>
         </div>
     </form>
+    <p class="section-copy">Hasil akan sama dengan spreadsheet manual saat data input cocok dan nilai K menggunakan 31.</p>
 </section>
 
 <section class="card-section">
@@ -117,9 +132,10 @@
                 <thead>
                     <tr>
                         <th>Lokasi</th>
+                        <th>Tanaman</th>
                         <th>Koordinat</th>
                         <th>K</th>
-                        <th>Rekomendasi</th>
+                        <th>Kelas</th>
                         <th>Aksi</th>
                     </tr>
                 </thead>
@@ -127,9 +143,10 @@
                     <?php foreach ($recentResults as $row): ?>
                         <tr>
                             <td><?= esc($row['nama_lahan'] ?: 'Tanpa nama') ?></td>
+                            <td><span class="badge"><?= esc($row['nama_komoditas_target'] ?: '-') ?></span></td>
                             <td><?= esc(number_format((float) $row['latitude'], 6)) ?>, <?= esc(number_format((float) $row['longitude'], 6)) ?></td>
                             <td><?= esc((string) $row['nilai_k']) ?></td>
-                            <td><span class="badge"><?= esc($row['rekomendasi_komoditas']) ?></span></td>
+                            <td><span class="badge"><?= esc($row['kelas_hasil'] ?: '-') ?></span></td>
                             <td><a class="link-edit" href="<?= site_url('klasifikasi/hasil/' . $row['id']) ?>">Lihat</a></td>
                         </tr>
                     <?php endforeach; ?>

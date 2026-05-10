@@ -36,7 +36,7 @@
 <section class="card-section import-card" id="import-csv">
     <div class="import-copy">
         <h3>Import CSV</h3>
-        <p>Gunakan file `.csv` dengan header persis seperti berikut, dalam urutan yang sama.</p>
+        <p>Gunakan file manual `data lahan.csv`. Sistem hanya mengambil data inti hingga marker `jenis tanaman uji`, lalu menyimpan 4 baris sisanya sebagai data uji contoh.</p>
         <code class="code-inline"><?= esc(implode(', ', $csvHeaders)) ?></code>
     </div>
     <form class="import-form" action="<?= site_url('data-latih/import') ?>" method="post" enctype="multipart/form-data">
@@ -58,16 +58,14 @@
                     <tr>
                         <th>No</th>
                         <th>Jenis Tanaman</th>
+                        <th>Kelas</th>
                         <th>Kemiringan</th>
-                        <th>Luas</th>
                         <th>pH</th>
                         <th>Jenis Tanah</th>
                         <th>Ketinggian</th>
                         <th>Kedalaman</th>
                         <th>Curah Hujan</th>
                         <th>Irigasi</th>
-                        <th>Latitude</th>
-                        <th>Longitude</th>
                         <th>Aksi</th>
                     </tr>
                 </thead>
@@ -77,16 +75,14 @@
                         <tr>
                             <td><?= esc((string) $nomor++) ?></td>
                             <td><span class="badge"><?= esc($row['nama_komoditas']) ?></span></td>
+                            <td><span class="badge"><?= esc($row['kelas'] ?? '-') ?></span></td>
                             <td><?= esc(number_format((float) $row['kemiringan_lereng'], 2)) ?>%</td>
-                            <td><?= esc(number_format((float) $row['luas_lahan'], 2)) ?> Ha</td>
                             <td><?= esc(number_format((float) $row['ph_tanah'], 2)) ?></td>
                             <td><?= esc($row['jenis_tanah']) ?></td>
                             <td><?= esc((string) $row['ketinggian_tempat']) ?> mdpl</td>
                             <td><?= esc((string) $row['kedalaman_tanah']) ?> cm</td>
                             <td><?= esc((string) $row['curah_hujan']) ?> mm</td>
                             <td><?= esc((string) ($row['irigasi'] ?? '-')) ?> m</td>
-                            <td><?= esc(number_format((float) $row['latitude'], 8)) ?></td>
-                            <td><?= esc(number_format((float) $row['longitude'], 8)) ?></td>
                             <td>
                                 <div class="table-actions">
                                     <a class="link-edit" href="<?= site_url('data-latih/' . $row['id'] . '/edit') ?>">Edit</a>

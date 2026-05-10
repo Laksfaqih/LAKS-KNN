@@ -6,47 +6,46 @@ class KnnClassifier
 {
     private const NUMERIC_FIELDS = [
         'kemiringan_lereng',
-        'luas_lahan',
-        'ph_tanah',
         'ketinggian_tempat',
-        'kedalaman_tanah',
         'curah_hujan',
+        'ph_tanah',
+        'kedalaman_tanah',
         'irigasi',
-        'latitude',
-        'longitude',
+    ];
+    private const SOIL_CODE_MAP = [
+        'tanah lempung' => 1.0,
+        'tanah kubi' => 2.0,
+        'tanah liat' => 3.0,
+        'tanah berpasir' => 4.0,
     ];
 
     /**
      * @param array<int, array<string, mixed>> $trainingData
-     * @param array<int, array<string, mixed>> $commodities
+     * @return array<string, mixed>
      */
-    public function classify(array $testingData, array $trainingData, array $commodities, int $requestedK): array
+    public function classify(array $testingData, array $trainingData, int $requestedK): array
     {
         if ($trainingData === []) {
-            throw new \RuntimeException('Data latih belum tersedia.');
+            throw new \RuntimeException('Data latih untuk tanaman yang dipilih belum tersedia.');
         }
 
-        if ($commodities === []) {
-            throw new \RuntimeException('Komoditas aktif belum tersedia.');
-        }
+        $distanceRows = $this->buildDistanceRows($trainingData, $testingData);
 
-        $commodityMap = [];
-        foreach ($commodities as $commodity) {
-            $commodityMap[(int) $commodity['id']] = $commodity;
-        }
+        usort($distanceRows, static function (array $left, array $right): int {
+            $byDistance = $left['distance'] <=> $right['distance'];
+            if ($byDistance !== 0) {
+                return $byDistance;
+            }
 
-        $ranges = $this->buildRanges($trainingData);
-        $normalizedTest = $this->normalizeRow($testingData, $ranges);
-        $distanceRows = $this->buildDistanceRows($trainingData, $testingData, $normalizedTest, $ranges);
-
-        usort($distanceRows, static fn(array $left, array $right): int => $left['distance'] <=> $right['distance']);
+            return $left['training_id'] <=> $right['training_id'];
+        });
 
         $effectiveK = min($requestedK, count($distanceRows));
         $neighbors = array_slice($distanceRows, 0, $effectiveK);
-        $votes = $this->aggregateVotes($neighbors, $commodityMap);
+        $votes = $this->aggregateVotes($neighbors);
 
         if ($votes === []) {
-            throw new \RuntimeException('Data latih aktif tidak memiliki jenis tanaman yang valid.');
+            throw new \RuntimeException('Data latih aktif tidak memiliki label kelas yang valid.');
         }
 
         usort($votes, static function (array $left, array $right): int {
@@ -55,21 +54,14 @@ class KnnClassifier
                 return $byVotes;
             }
 
-            $byDistance = $left['average_distance'] <=> $right['average_distance'];
-            if ($byDistance !== 0) {
-                return $byDistance;
-            }
-
-            return $left['urutan_tampil'] <=> $right['urutan_tampil'];
+            return $left['average_distance'] <=> $right['average_distance'];
         });
 
         return [
-            'ranges'          => $ranges,
-            'normalized_test' => $normalizedTest,
             'distances'       => $distanceRows,
             'neighbors'       => $neighbors,
             'votes'           => $votes,
-            'recommendation'  => $votes[0],
+            'prediction'      => $votes[0],
             'effective_k'     => $effectiveK,
             'requested_k'     => $requestedK,
         ];
@@ -77,106 +69,69 @@ class KnnClassifier
 
     /**
      * @param array<int, array<string, mixed>> $trainingData
-     * @return array<string, array{min: float, max: float}>
-     */
-    private function buildRanges(array $trainingData): array
-    {
-        $ranges = [];
-
-        foreach (self::NUMERIC_FIELDS as $field) {
-            $values = array_map(static fn(array $row): float => (float) $row[$field], $trainingData);
-            $ranges[$field] = [
-                'min' => min($values),
-                'max' => max($values),
-            ];
-        }
-
-        return $ranges;
-    }
-
-    /**
-     * @param array<string, array{min: float, max: float}> $ranges
-     * @return array<string, float>
-     */
-    private function normalizeRow(array $row, array $ranges): array
-    {
-        $normalized = [];
-
-        foreach (self::NUMERIC_FIELDS as $field) {
-            $value = (float) $row[$field];
-            $min = (float) $ranges[$field]['min'];
-            $max = (float) $ranges[$field]['max'];
-            $normalized[$field] = $max === $min ? 0.0 : ($value - $min) / ($max - $min);
-        }
-
-        return $normalized;
-    }
-
-    /**
-     * @param array<int, array<string, mixed>> $trainingData
-     * @param array<string, float> $normalizedTest
-     * @param array<string, array{min: float, max: float}> $ranges
      * @return array<int, array<string, mixed>>
      */
-    private function buildDistanceRows(array $trainingData, array $testingData, array $normalizedTest, array $ranges): array
+    private function buildDistanceRows(array $trainingData, array $testingData): array
     {
         $rows = [];
+        $testingSoil = $this->soilCode((string) ($testingData['jenis_tanah'] ?? ''));
 
         foreach ($trainingData as $row) {
-            $normalizedTraining = $this->normalizeRow($row, $ranges);
             $sum = 0.0;
 
             foreach (self::NUMERIC_FIELDS as $field) {
-                $delta = $normalizedTest[$field] - $normalizedTraining[$field];
+                $delta = (float) $testingData[$field] - (float) $row[$field];
                 $sum += $delta ** 2;
             }
 
-            $jenisTanahDelta = strtolower((string) $testingData['jenis_tanah']) === strtolower((string) $row['jenis_tanah']) ? 0.0 : 1.0;
+            $jenisTanahDelta = $testingSoil - $this->soilCode((string) ($row['jenis_tanah'] ?? ''));
             $sum += $jenisTanahDelta ** 2;
 
             $rows[] = [
-                'training_id'         => (int) $row['id'],
-                'komoditas_id'        => (int) $row['komoditas_id'],
-                'distance'            => sqrt($sum),
-                'normalized_training' => $normalizedTraining,
-                'jenis_tanah'         => $row['jenis_tanah'],
-                'raw'                 => $row,
+                'training_id'  => (int) $row['id'],
+                'komoditas_id' => (int) ($row['komoditas_id'] ?? 0),
+                'kelas'        => (string) ($row['kelas'] ?? ''),
+                'distance'     => sqrt($sum),
+                'jenis_tanah'  => $row['jenis_tanah'],
+                'raw'          => $row,
             ];
         }
 
         return $rows;
     }
 
+    private function soilCode(string $value): float
+    {
+        $normalized = strtolower(trim($value));
+
+        return self::SOIL_CODE_MAP[$normalized] ?? 0.0;
+    }
+
     /**
      * @param array<int, array<string, mixed>> $neighbors
-     * @param array<int, array<string, mixed>> $commodityMap
      * @return array<int, array<string, mixed>>
      */
-    private function aggregateVotes(array $neighbors, array $commodityMap): array
+    private function aggregateVotes(array $neighbors): array
     {
         $groups = [];
 
         foreach ($neighbors as $neighbor) {
-            $commodityId = (int) ($neighbor['komoditas_id'] ?? 0);
-            if ($commodityId === 0 || ! isset($commodityMap[$commodityId])) {
+            $kelas = strtoupper(trim((string) ($neighbor['kelas'] ?? '')));
+            if (! in_array($kelas, ['S1', 'S2', 'S3', 'N'], true)) {
                 continue;
             }
 
-            if (! isset($groups[$commodityId])) {
-                $commodity = $commodityMap[$commodityId];
-                $groups[$commodityId] = [
-                    'komoditas_id'     => $commodityId,
-                    'nama'             => (string) $commodity['nama'],
-                    'warna_peta'       => (string) $commodity['warna_peta'],
-                    'urutan_tampil'    => (int) ($commodity['urutan_tampil'] ?? 0),
+            if (! isset($groups[$kelas])) {
+                $groups[$kelas] = [
+                    'kelas'            => $kelas,
                     'votes'            => 0,
                     'distance_total'   => 0.0,
                     'average_distance' => INF,
                 ];
             }
 
-            $groups[$commodityId]['votes']++;
-            $groups[$commodityId]['distance_total'] += (float) $neighbor['distance'];
+            $groups[$kelas]['votes']++;
+            $groups[$kelas]['distance_total'] += (float) $neighbor['distance'];
         }
 
         foreach ($groups as &$group) {

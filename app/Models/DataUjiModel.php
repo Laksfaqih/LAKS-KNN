@@ -33,7 +33,7 @@ class DataUjiModel extends Model
     protected array $casts = [
         'id'                => 'integer',
         'kemiringan_lereng' => 'float',
-        'luas_lahan'        => 'float',
+        'luas_lahan'        => '?float',
         'ph_tanah'          => 'float',
         'ketinggian_tempat' => 'integer',
         'kedalaman_tanah'   => 'integer',
