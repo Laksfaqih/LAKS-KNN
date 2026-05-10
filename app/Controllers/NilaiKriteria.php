@@ -11,6 +11,18 @@ use CodeIgniter\HTTP\Files\UploadedFile;
 class NilaiKriteria extends BaseController
 {
     private const CLASS_OPTIONS = ['S1', 'S2', 'S3', 'N'];
+    private const EXPECTED_CLASS_SET = ['S1', 'S2', 'S3', 'N'];
+    private const SUPPORTED_BLOCK_HEADERS = [
+        ['lereng', 'elevasi/ketinggian', 'curah hujan', 'ph tanah', 'jenis tanah', 'kedalaman tanah', 'irigasi', 'kelas'],
+        ['lereng', 'elevasi ketinggian', 'curah hujan', 'ph tanah', 'jenis tanah', 'kedalaman tanah', 'irigasi', 'kelas'],
+        ['lereng', 'elevasi ketinggian', 'curah hujan', 'ph tanah', 'jenis tanah', 'kedalaman', 'irigasi', 'kelas'],
+    ];
+    private const SOIL_CODE_MAP = [
+        '1' => 'tanah lempung',
+        '2' => 'tanah kubi',
+        '3' => 'tanah liat',
+        '4' => 'tanah berpasir',
+    ];
 
     private NilaiKriteriaModel $nilaiKriteriaModel;
     private CommodityCatalog $commodityCatalog;
@@ -32,8 +44,9 @@ class NilaiKriteria extends BaseController
             ->getResultArray();
 
         return view('component/nilai_kriteria/index', [
-            'title'         => 'Nilai Kriteria',
-            'nilaiKriteria' => $rows,
+            'title'                      => 'Nilai Kriteria',
+            'nilaiKriteria'              => $rows,
+            'supportedKriteriaCsvHeader' => self::SUPPORTED_BLOCK_HEADERS[0],
         ]);
     }
 
@@ -134,8 +147,48 @@ class NilaiKriteria extends BaseController
             }
         }
 
+        [$rows, $errors, $commodityIds] = $this->parseImportRows($handle, $commodityMap);
+
+        fclose($handle);
+
+        if ($errors !== []) {
+            return redirect()->to('/nilai-kriteria')->with('error', implode(' ', $errors));
+        }
+
+        if ($rows === []) {
+            return redirect()->to('/nilai-kriteria')->with('error', 'Tidak ada baris valid yang bisa diimport dari CSV.');
+        }
+
+        $this->db->transStart();
+
+        if ($commodityIds !== []) {
+            $this->db->table('nilai_kriteria')->whereIn('komoditas_id', $commodityIds)->delete();
+        }
+
+        foreach ($rows as $payload) {
+            $this->nilaiKriteriaModel->insert($payload);
+        }
+
+        $this->db->transComplete();
+
+        if (! $this->db->transStatus()) {
+            return redirect()->to('/nilai-kriteria')->with('error', 'Import CSV gagal mengganti nilai kriteria.');
+        }
+
+        return redirect()->to('/nilai-kriteria')->with('success', count($rows) . ' baris nilai kriteria berhasil diimport dan menggantikan data lama.');
+    }
+
+    /**
+     * @param array<string, int> $commodityMap
+     * @return array{0: array<int, array<string, mixed>>, 1: list<string>, 2: list<int>}
+     */
+    private function parseImportRows($handle, array $commodityMap): array
+    {
         $rows = [];
+        $errors = [];
         $currentCommodityId = null;
+        $classMapByCommodity = [];
+        $recognizedHeader = false;
 
         while (($row = fgetcsv($handle, 0, ',')) !== false) {
             $cells = array_map(static fn(mixed $cell): string => trim((string) $cell), $row);
@@ -144,7 +197,8 @@ class NilaiKriteria extends BaseController
                 continue;
             }
 
-            if ($first === 'lereng') {
+            if ($this->isSupportedBlockHeader($cells)) {
+                $recognizedHeader = true;
                 continue;
             }
 
@@ -153,12 +207,18 @@ class NilaiKriteria extends BaseController
                 continue;
             }
 
-            if ($currentCommodityId === null || count($cells) < 9) {
+            if ($currentCommodityId === null) {
                 continue;
             }
 
-            $kelas = strtoupper(trim((string) ($cells[8] ?? '')));
+            $kelas = strtoupper(trim((string) ($cells[7] ?? '')));
             if (! in_array($kelas, self::CLASS_OPTIONS, true)) {
+                continue;
+            }
+
+            $soil = $this->resolveSoilType($cells[4] ?? '', $cells[11] ?? '');
+            if ($soil === '') {
+                $errors[] = 'Kode atau label jenis tanah pada file CSV tidak dikenali.';
                 continue;
             }
 
@@ -166,20 +226,19 @@ class NilaiKriteria extends BaseController
             [$ketMin, $ketMax] = $this->parseRangeInt($cells[1] ?? '');
             [$curMin, $curMax] = $this->parseRangeInt($cells[2] ?? '');
             [$phMin, $phMax] = $this->parseRangeDecimal($cells[3] ?? '');
-            [$luasMin, $luasMax] = $this->parseRangeAreaHa($cells[5] ?? '');
-            [$kedMin, $kedMax] = $this->parseRangeInt($cells[6] ?? '');
-            [$iriMin, $iriMax] = $this->parseRangeInt($cells[7] ?? '');
+            [$kedMin, $kedMax] = $this->parseRangeInt($cells[5] ?? '');
+            [$iriMin, $iriMax] = $this->parseRangeInt($cells[6] ?? '');
 
-            $soil = $this->normalizeSoilTypeLabel($cells[4] ?? '');
-            $soilJson = $soil === '' ? json_encode([]) : json_encode([$soil], JSON_UNESCAPED_UNICODE);
+            if (isset($classMapByCommodity[$currentCommodityId][$kelas])) {
+                $errors[] = 'Setiap komoditas pada CSV tidak boleh memiliki kelas duplikat.';
+                continue;
+            }
 
             $rows[] = [
                 'komoditas_id'     => $currentCommodityId,
                 'kelas'            => $kelas,
                 'kemiringan_min'   => $kemMin,
                 'kemiringan_max'   => $kemMax,
-                'luas_min'         => $luasMin,
-                'luas_max'         => $luasMax,
                 'ph_min'           => $phMin,
                 'ph_max'           => $phMax,
                 'ketinggian_min'   => $ketMin,
@@ -190,32 +249,53 @@ class NilaiKriteria extends BaseController
                 'curah_hujan_max'  => $curMax,
                 'irigasi_min'      => $iriMin,
                 'irigasi_max'      => $iriMax,
-                'jenis_tanah_json' => $soilJson,
-                'catatan'          => 'import_csv',
+                'jenis_tanah_json' => json_encode([$soil], JSON_UNESCAPED_UNICODE),
+                'catatan'          => 'import_csv_replace',
             ];
+
+            $classMapByCommodity[$currentCommodityId][$kelas] = true;
         }
 
-        fclose($handle);
-
-        if ($rows === []) {
-            return redirect()->to('/nilai-kriteria')->with('error', 'Tidak ada baris valid yang bisa diimport dari CSV.');
+        if (! $recognizedHeader) {
+            $errors[] = 'Header CSV kriteria tidak dikenali. Gunakan header blok seperti: lereng, elevasi/ketinggian, curah hujan, ph tanah, jenis tanah, kedalaman tanah, irigasi, kelas.';
         }
 
-        foreach ($rows as $payload) {
-            $existing = $this->nilaiKriteriaModel
-                ->where('komoditas_id', (int) $payload['komoditas_id'])
-                ->where('kelas', (string) $payload['kelas'])
-                ->first();
+        foreach ($classMapByCommodity as $commodityId => $classes) {
+            $present = array_keys($classes);
+            sort($present);
+            $expected = self::EXPECTED_CLASS_SET;
+            sort($expected);
 
-            if ($existing !== null) {
-                $this->nilaiKriteriaModel->update((int) $existing['id'], $payload);
-                continue;
+            if ($present !== $expected) {
+                $errors[] = 'Setiap komoditas pada CSV harus memiliki tepat 4 kelas: S1, S2, S3, N.';
+                break;
             }
-
-            $this->nilaiKriteriaModel->insert($payload);
         }
 
-        return redirect()->to('/nilai-kriteria')->with('success', count($rows) . ' baris nilai kriteria berhasil diimport.');
+        if ($rows !== [] && $classMapByCommodity === []) {
+            $errors[] = 'Struktur CSV tidak sesuai format kriteria yang didukung.';
+        }
+
+        return [$rows, array_values(array_unique($errors)), array_map('intval', array_keys($classMapByCommodity))];
+    }
+
+    /**
+     * @param array<int, string> $cells
+     */
+    private function isSupportedBlockHeader(array $cells): bool
+    {
+        $normalized = array_map(
+            static fn(string $cell): string => mb_strtolower(trim(str_replace("\xEF\xBB\xBF", '', $cell))),
+            array_slice($cells, 0, 8),
+        );
+
+        foreach (self::SUPPORTED_BLOCK_HEADERS as $header) {
+            if ($normalized === $header) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function payload(): array
@@ -225,8 +305,6 @@ class NilaiKriteria extends BaseController
             'kelas'            => trim((string) $this->request->getPost('kelas')),
             'kemiringan_min'   => $this->normalizeOptionalDecimal('kemiringan_min'),
             'kemiringan_max'   => $this->normalizeOptionalDecimal('kemiringan_max'),
-            'luas_min'         => $this->normalizeOptionalDecimal('luas_min'),
-            'luas_max'         => $this->normalizeOptionalDecimal('luas_max'),
             'ph_min'           => $this->normalizeOptionalDecimal('ph_min'),
             'ph_max'           => $this->normalizeOptionalDecimal('ph_max'),
             'ketinggian_min'   => $this->normalizeOptionalInt('ketinggian_min'),
@@ -259,8 +337,6 @@ class NilaiKriteria extends BaseController
             ],
             'kemiringan_min'  => 'permit_empty|decimal',
             'kemiringan_max'  => 'permit_empty|decimal',
-            'luas_min'        => 'permit_empty|decimal',
-            'luas_max'        => 'permit_empty|decimal',
             'ph_min'          => 'permit_empty|decimal',
             'ph_max'          => 'permit_empty|decimal',
             'ketinggian_min'  => 'permit_empty|integer',
@@ -413,7 +489,7 @@ class NilaiKriteria extends BaseController
     private function parseRange(string $raw, bool $decimal, bool $area): array
     {
         $text = mb_strtolower(trim($raw));
-        if ($text === '' || (str_contains($text, '<') && str_contains($text, '>') && str_contains($text, '/'))) {
+        if ($text === '' || $this->isDisjointRange($text)) {
             return [null, null];
         }
 
@@ -447,6 +523,11 @@ class NilaiKriteria extends BaseController
         }
 
         return [$numbers[0], $numbers[0]];
+    }
+
+    private function isDisjointRange(string $text): bool
+    {
+        return str_contains($text, '&') && str_contains($text, '<') && str_contains($text, '>');
     }
 
     private function toNumber(string $token, bool $decimal, bool $isSquareMeter): ?float
@@ -494,5 +575,15 @@ class NilaiKriteria extends BaseController
         }
 
         return '';
+    }
+
+    private function resolveSoilType(string $code, string $label): string
+    {
+        $normalizedCode = trim($code);
+        if ($normalizedCode !== '' && isset(self::SOIL_CODE_MAP[$normalizedCode])) {
+            return self::SOIL_CODE_MAP[$normalizedCode];
+        }
+
+        return $this->normalizeSoilTypeLabel($label);
     }
 }

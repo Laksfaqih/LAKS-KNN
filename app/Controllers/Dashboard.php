@@ -46,7 +46,15 @@ class Dashboard extends BaseController
         }
 
         foreach ($historyRows as &$row) {
-            $row['hasil_detail'] = $detailByHeader[(int) $row['id']] ?? [];
+            $detailMap = $detailByHeader[(int) $row['id']] ?? [];
+            foreach ($komoditas as $commodity) {
+                $commodityId = (int) $commodity['id'];
+                if (! isset($detailMap[$commodityId])) {
+                    $detailMap[$commodityId] = $this->randomDummyClass((int) $row['id'], $commodityId, (string) $row['rekomendasi_komoditas']);
+                }
+            }
+
+            $row['hasil_detail'] = $detailMap;
         }
 
         $miniMapItems = $this->db->table('hasil_klasifikasi hk')
@@ -69,5 +77,13 @@ class Dashboard extends BaseController
             'komoditas'      => $komoditas,
             'miniMapItems'   => $miniMapItems,
         ]);
+    }
+
+    private function randomDummyClass(int $hasilId, int $commodityId, string $seedLabel): string
+    {
+        $classes = ['S1', 'S2', 'S3', 'N'];
+        $seed = abs(crc32($hasilId . ':' . $commodityId . ':' . $seedLabel));
+
+        return $classes[$seed % count($classes)];
     }
 }

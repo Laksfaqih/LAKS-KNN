@@ -16,8 +16,6 @@ class NilaiKriteriaModel extends Model
         'kelas',
         'kemiringan_min',
         'kemiringan_max',
-        'luas_min',
-        'luas_max',
         'ph_min',
         'ph_max',
         'ketinggian_min',

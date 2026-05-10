@@ -54,7 +54,6 @@ $selectedJenisTanah = json_decode((string) ($nilaiKriteria['jenis_tanah_json'] ?
 
         <?php foreach ([
             'kemiringan' => 'Kemiringan Lereng',
-            'luas' => 'Luas Lahan',
             'ph' => 'pH Tanah',
             'ketinggian' => 'Ketinggian',
             'kedalaman' => 'Kedalaman',

@@ -15,7 +15,6 @@ final class SuitabilityClassEvaluatorTest extends CIUnitTestCase
         $result = $evaluator->evaluateAll(
             [
                 'kemiringan_lereng' => 8,
-                'luas_lahan' => 2.5,
                 'ph_tanah' => 6.5,
                 'jenis_tanah' => 'tanah liat',
                 'ketinggian_tempat' => 400,
@@ -33,8 +32,6 @@ final class SuitabilityClassEvaluatorTest extends CIUnitTestCase
                     'kelas' => 'S2',
                     'kemiringan_min' => '0',
                     'kemiringan_max' => '15',
-                    'luas_min' => null,
-                    'luas_max' => null,
                     'ph_min' => '5.5',
                     'ph_max' => '7.0',
                     'ketinggian_min' => null,
@@ -50,8 +47,6 @@ final class SuitabilityClassEvaluatorTest extends CIUnitTestCase
                     'kelas' => 'S1',
                     'kemiringan_min' => '0',
                     'kemiringan_max' => '10',
-                    'luas_min' => null,
-                    'luas_max' => null,
                     'ph_min' => '6.0',
                     'ph_max' => '7.0',
                     'ketinggian_min' => null,

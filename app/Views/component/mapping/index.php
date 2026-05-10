@@ -69,7 +69,6 @@
                     <p><strong>Rekomendasi KNN:</strong> ${item.rekomendasi_komoditas}</p>
                     <p><strong>Jenis Tanah:</strong> ${item.jenis_tanah}</p>
                     <p><strong>Lereng:</strong> ${item.kemiringan_lereng}%</p>
-                    <p><strong>Luas:</strong> ${item.luas_lahan} Ha</p>
                     <p><strong>pH:</strong> ${item.ph_tanah}</p>
                     <p><strong>Ketinggian:</strong> ${item.ketinggian_tempat} mdpl</p>
                     <p><strong>Kedalaman:</strong> ${item.kedalaman_tanah} cm</p>

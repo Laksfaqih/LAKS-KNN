@@ -15,6 +15,8 @@ class HasilKlasifikasiModel extends Model
         'data_uji_id',
         'rekomendasi_komoditas',
         'komoditas_rekomendasi_id',
+        'komoditas_target_id',
+        'kelas_hasil',
         'nilai_k',
     ];
 
@@ -25,6 +27,7 @@ class HasilKlasifikasiModel extends Model
         'id'          => 'integer',
         'data_uji_id' => 'integer',
         'komoditas_rekomendasi_id' => '?integer',
+        'komoditas_target_id' => '?integer',
         'nilai_k'     => 'integer',
     ];
 }

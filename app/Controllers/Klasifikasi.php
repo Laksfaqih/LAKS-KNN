@@ -6,7 +6,6 @@ use App\Libraries\CommodityCatalog;
 use App\Libraries\GeoPolygon;
 use App\Libraries\KnnClassifier;
 use App\Libraries\SoilTypeCatalog;
-use App\Libraries\SuitabilityClassEvaluator;
 use App\Models\DataLatihModel;
 use App\Models\DataUjiModel;
 use App\Models\HasilKlasifikasiDetailModel;
@@ -28,7 +27,6 @@ class Klasifikasi extends BaseController
     private HasilKlasifikasiDetailModel $hasilKlasifikasiDetailModel;
     private CommodityCatalog $commodityCatalog;
     private KnnClassifier $classifier;
-    private SuitabilityClassEvaluator $classEvaluator;
     private GeoPolygon $geoPolygon;
 
     public function __construct()
@@ -39,15 +37,15 @@ class Klasifikasi extends BaseController
         $this->hasilKlasifikasiDetailModel = new HasilKlasifikasiDetailModel();
         $this->commodityCatalog = new CommodityCatalog();
         $this->classifier = new KnnClassifier();
-        $this->classEvaluator = new SuitabilityClassEvaluator();
         $this->geoPolygon = new GeoPolygon();
     }
 
     public function index()
     {
         $recentResults = $this->db->table('hasil_klasifikasi hk')
-            ->select('hk.id, hk.nilai_k, hk.rekomendasi_komoditas, du.nama_lahan, du.latitude, du.longitude')
+            ->select('hk.id, hk.nilai_k, hk.rekomendasi_komoditas, hk.kelas_hasil, k.nama AS nama_komoditas_target, du.nama_lahan, du.latitude, du.longitude')
             ->join('data_uji du', 'du.id = hk.data_uji_id')
+            ->join('komoditas k', 'k.id = hk.komoditas_target_id', 'left')
             ->orderBy('hk.id', 'DESC')
             ->limit(10)
             ->get()
@@ -56,6 +54,7 @@ class Klasifikasi extends BaseController
         return view('component/klasifikasi/index', [
             'title'             => 'Klasifikasi',
             'jenisTanahOptions' => SoilTypeCatalog::all(),
+            'komoditasOptions'  => $this->commodityCatalog->active(),
             'validation'        => service('validation'),
             'totalDataLatih'    => $this->dataLatihModel->countAll(),
             'recentResults'     => $recentResults,
@@ -95,12 +94,14 @@ class Klasifikasi extends BaseController
             return redirect()->to('/klasifikasi')->withInput();
         }
 
-        $komoditas = $this->commodityCatalog->active();
-        $trainingData = $this->trainingData($komoditas);
-        $criteriaRows = $this->criteriaRows($komoditas);
+        $commodity = $this->selectedCommodity();
+        if ($commodity === null) {
+            return redirect()->to('/klasifikasi')->withInput()->with('error', 'Tanaman yang dipilih tidak ditemukan.');
+        }
 
+        $trainingData = $this->trainingData();
         if ($trainingData === []) {
-            return redirect()->to('/klasifikasi')->withInput()->with('error', 'Data latih belum tersedia. Tambahkan data latih terlebih dahulu.');
+            return redirect()->to('/klasifikasi')->withInput()->with('error', 'Data latih aktif belum tersedia.');
         }
 
         try {
@@ -110,8 +111,9 @@ class Klasifikasi extends BaseController
             }
 
             $requestedK = (int) $this->request->getPost('nilai_k');
-            $classification = $this->classifier->classify($dataUjiPayload, $trainingData, $komoditas, $requestedK);
-            $classResults = $this->classEvaluator->evaluateAll($dataUjiPayload, $komoditas, $criteriaRows);
+            $classification = $this->classifier->classify($dataUjiPayload, $trainingData, $requestedK);
+            $predictedClass = (string) $classification['prediction']['kelas'];
+            $recommendedCommodityId = $predictedClass === 'N' ? null : (int) $commodity['id'];
         } catch (\Throwable $exception) {
             return redirect()->to('/klasifikasi')->withInput()->with('error', $exception->getMessage());
         }
@@ -121,21 +123,19 @@ class Klasifikasi extends BaseController
 
         $headerPayload = [
             'data_uji_id'              => $dataUjiId,
-            'rekomendasi_komoditas'    => $classification['recommendation']['nama'],
-            'komoditas_rekomendasi_id' => $classification['recommendation']['komoditas_id'],
+            'rekomendasi_komoditas'    => $recommendedCommodityId === null ? 'Tidak direkomendasikan' : (string) $commodity['nama'],
+            'komoditas_rekomendasi_id' => $recommendedCommodityId,
+            'komoditas_target_id'      => (int) $commodity['id'],
+            'kelas_hasil'              => $predictedClass,
             'nilai_k'                  => $classification['effective_k'],
         ];
 
         $this->hasilKlasifikasiModel->insert($headerPayload);
         $hasilId = (int) $this->hasilKlasifikasiModel->getInsertID();
 
-        foreach ($classResults as $result) {
-            $this->hasilKlasifikasiDetailModel->insert([
-                'hasil_klasifikasi_id' => $hasilId,
-                'komoditas_id'         => $result['komoditas_id'],
-                'kelas'                => $result['kelas'],
-            ]);
-        }
+        $this->hasilKlasifikasiDetailModel->insertBatch(
+            $this->buildDetailRows($hasilId, (int) $commodity['id'], $predictedClass)
+        );
 
         $this->db->transComplete();
 
@@ -158,22 +158,73 @@ class Klasifikasi extends BaseController
             throw PageNotFoundException::forPageNotFound('Data uji tidak ditemukan.');
         }
 
-        $komoditas = $this->commodityCatalog->active();
+        $targetCommodity = null;
+        if (! empty($hasil['komoditas_target_id'])) {
+            $targetCommodity = $this->db->table('komoditas')->where('id', (int) $hasil['komoditas_target_id'])->get()->getRowArray();
+        }
+
+        $mapColor = '#b45309';
+        if ((string) ($hasil['kelas_hasil'] ?? '') !== 'N' && $targetCommodity !== null) {
+            $mapColor = (string) ($targetCommodity['warna_peta'] ?? $mapColor);
+        }
+
         $detailRows = $this->db->table('hasil_klasifikasi_detail hd')
-            ->select('hd.kelas, k.id AS komoditas_id, k.nama, k.warna_peta')
+            ->select('hd.kelas, hd.komoditas_id, k.nama')
             ->join('komoditas k', 'k.id = hd.komoditas_id')
             ->where('hd.hasil_klasifikasi_id', $hasilId)
             ->orderBy('k.urutan_tampil', 'ASC')
+            ->orderBy('k.id', 'ASC')
             ->get()
             ->getResultArray();
 
+        $detailMap = [];
+        foreach ($detailRows as $detailRow) {
+            $detailMap[(int) $detailRow['komoditas_id']] = $detailRow;
+        }
+
+        $detailRows = [];
+        foreach ($this->commodityCatalog->active() as $commodityRow) {
+            $commodityId = (int) $commodityRow['id'];
+            $detailRows[] = $detailMap[$commodityId] ?? [
+                'komoditas_id' => $commodityId,
+                'nama'         => $commodityRow['nama'],
+                'kelas'        => $this->randomDummyClass($hasilId, $commodityId, (string) ($hasil['rekomendasi_komoditas'] ?? '')),
+            ];
+        }
+
         return view('component/klasifikasi/result', [
-            'title'      => 'Hasil Klasifikasi',
-            'hasil'      => $hasil,
-            'dataUji'    => $dataUji,
-            'komoditas'  => $komoditas,
-            'detailRows' => $detailRows,
+            'title'           => 'Hasil Klasifikasi',
+            'hasil'           => $hasil,
+            'dataUji'         => $dataUji,
+            'targetCommodity' => $targetCommodity,
+            'detailRows'      => $detailRows,
+            'mapColor'        => $mapColor,
         ]);
+    }
+
+    private function buildDetailRows(int $hasilId, int $targetCommodityId, string $predictedClass): array
+    {
+        $rows = [];
+        foreach ($this->commodityCatalog->active() as $commodity) {
+            $commodityId = (int) $commodity['id'];
+            $rows[] = [
+                'hasil_klasifikasi_id' => $hasilId,
+                'komoditas_id'         => $commodityId,
+                'kelas'                => $commodityId === $targetCommodityId
+                    ? $predictedClass
+                    : $this->randomDummyClass($hasilId, $commodityId, $predictedClass),
+            ];
+        }
+
+        return $rows;
+    }
+
+    private function randomDummyClass(int $hasilId, int $commodityId, string $predictedClass): string
+    {
+        $classes = ['S1', 'S2', 'S3', 'N'];
+        $seed = abs(crc32($hasilId . ':' . $commodityId . ':' . $predictedClass));
+
+        return $classes[$seed % count($classes)];
     }
 
     private function payload(): array
@@ -186,7 +237,7 @@ class Klasifikasi extends BaseController
         return [
             'nama_lahan'         => $namaLahan,
             'kemiringan_lereng'  => $this->request->getPost('kemiringan_lereng'),
-            'luas_lahan'         => $this->request->getPost('luas_lahan'),
+            'luas_lahan'         => null,
             'ph_tanah'           => $this->request->getPost('ph_tanah'),
             'jenis_tanah'        => $this->request->getPost('jenis_tanah'),
             'ketinggian_tempat'  => $this->request->getPost('ketinggian_tempat'),
@@ -202,11 +253,13 @@ class Klasifikasi extends BaseController
 
     private function validationRules(): array
     {
+        $komoditasIds = array_map(static fn(array $row): string => (string) $row['id'], $this->commodityCatalog->active());
+
         return [
+            'komoditas_id'       => 'required|in_list[' . implode(',', $komoditasIds ?: ['0']) . ']',
             'latitude'           => 'required|decimal|greater_than_equal_to[-90]|less_than_equal_to[90]',
             'longitude'          => 'required|decimal|greater_than_equal_to[-180]|less_than_equal_to[180]',
             'kemiringan_lereng'  => 'required|decimal|greater_than_equal_to[0]',
-            'luas_lahan'         => 'required|decimal|greater_than[0]',
             'ph_tanah'           => 'required|decimal|greater_than_equal_to[0]|less_than_equal_to[14]',
             'jenis_tanah'        => 'required|in_list[' . implode(',', SoilTypeCatalog::all()) . ']',
             'ketinggian_tempat'  => 'required|integer|greater_than_equal_to[0]',
@@ -220,6 +273,10 @@ class Klasifikasi extends BaseController
     private function validationMessages(): array
     {
         return [
+            'komoditas_id' => [
+                'required' => 'Tanaman wajib dipilih.',
+                'in_list'  => 'Tanaman tidak valid.',
+            ],
             'latitude' => [
                 'required'              => 'Latitude wajib diisi.',
                 'decimal'               => 'Latitude harus berupa angka desimal.',
@@ -235,10 +292,6 @@ class Klasifikasi extends BaseController
             'kemiringan_lereng' => [
                 'required' => 'Kemiringan lereng wajib diisi.',
                 'decimal'  => 'Kemiringan lereng harus berupa angka desimal.',
-            ],
-            'luas_lahan' => [
-                'required' => 'Luas lahan wajib diisi.',
-                'decimal'  => 'Luas lahan harus berupa angka desimal.',
             ],
             'ph_tanah' => [
                 'required'           => 'pH tanah wajib diisi.',
@@ -273,37 +326,25 @@ class Klasifikasi extends BaseController
     }
 
     /**
-     * @param array<int, array<string, mixed>> $komoditas
      * @return array<int, array<string, mixed>>
      */
-    private function trainingData(array $komoditas): array
+    private function trainingData(): array
     {
-        $ids = array_map(static fn(array $row): int => (int) $row['id'], $komoditas);
-        if ($ids === []) {
-            return [];
-        }
-
         return $this->dataLatihModel
-            ->whereIn('komoditas_id', $ids)
+            ->select('data_latih.*, data_latih_label.kelas')
+            ->join('data_latih_label', 'data_latih_label.data_latih_id = data_latih.id')
+            ->orderBy('data_latih.id', 'ASC')
             ->findAll();
     }
 
-    /**
-     * @param array<int, array<string, mixed>> $komoditas
-     * @return array<int, array<string, mixed>>
-     */
-    private function criteriaRows(array $komoditas): array
+    private function selectedCommodity(): ?array
     {
-        $ids = array_map(static fn(array $row): int => (int) $row['id'], $komoditas);
-        if ($ids === []) {
-            return [];
+        $commodityId = (int) $this->request->getPost('komoditas_id');
+        if ($commodityId <= 0) {
+            return null;
         }
 
-        return $this->db->table('nilai_kriteria')
-            ->whereIn('komoditas_id', $ids)
-            ->orderBy('FIELD(kelas, "S1", "S2", "S3", "N")', '', false)
-            ->get()
-            ->getResultArray();
+        return $this->db->table('komoditas')->where('id', $commodityId)->get()->getRowArray();
     }
 
     private function isInsideServiceArea(float $latitude, float $longitude): bool
