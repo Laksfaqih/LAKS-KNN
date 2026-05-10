@@ -21,8 +21,6 @@ class DataLatihModel extends Model
         'curah_hujan',
         'irigasi',
         'komoditas_id',
-        'latitude',
-        'longitude',
     ];
 
     protected bool $allowEmptyInserts = false;
@@ -38,8 +36,6 @@ class DataLatihModel extends Model
         'curah_hujan'       => 'integer',
         'irigasi'           => 'integer',
         'komoditas_id'      => 'integer',
-        'latitude'          => '?float',
-        'longitude'         => '?float',
     ];
 
     public function ordered(): self

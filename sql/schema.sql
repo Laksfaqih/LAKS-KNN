@@ -29,8 +29,6 @@ CREATE TABLE IF NOT EXISTS data_latih (
     kedalaman_tanah INT NOT NULL,
     curah_hujan INT NOT NULL,
     komoditas_id INT UNSIGNED NOT NULL,
-    latitude DECIMAL(10,8) NOT NULL,
-    longitude DECIMAL(11,8) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (komoditas_id) REFERENCES komoditas(id)
         ON DELETE CASCADE ON UPDATE CASCADE

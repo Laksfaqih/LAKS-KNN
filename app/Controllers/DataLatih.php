@@ -274,8 +274,6 @@ class DataLatih extends BaseController
             'curah_hujan'       => $this->request->getPost('curah_hujan'),
             'irigasi'           => $this->request->getPost('irigasi'),
             'komoditas_id'      => (int) $this->request->getPost('komoditas_id'),
-            'latitude'          => null,
-            'longitude'         => null,
         ];
     }
 
@@ -425,8 +423,6 @@ class DataLatih extends BaseController
             'curah_hujan'       => $this->normalizeIntegerValue((string) ($cells[3] ?? '')),
             'irigasi'           => $this->normalizeIntegerValue((string) ($cells[7] ?? '')),
             'komoditas_id'      => $commodityId,
-            'latitude'          => null,
-            'longitude'         => null,
         ];
 
         $validation = Services::validation();
