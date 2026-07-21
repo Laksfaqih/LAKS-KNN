@@ -84,6 +84,116 @@
         </div>
     <?php endif; ?>
 </section>
+
+<section class="card-section">
+    <h3 class="section-title">Hasil Normalisasi (Min-Max)</h3>
+    <p style="color:#4b5563; margin-bottom:12px; font-size:13px;">Normalisasi data uji terhadap rentang nilai data latih (rumus: (x - min) / (max - min)).</p>
+    <?php if (!empty($normalization['fields'])): ?>
+        <div class="table-wrapper">
+            <table class="data-table" style="min-width:600px;">
+                <thead>
+                    <tr>
+                        <th>Atribut</th>
+                        <th>Min</th>
+                        <th>Max</th>
+                        <th>Nilai Asli</th>
+                        <th>Nilai Normalisasi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($normalization['fields'] as $field): ?>
+                        <tr>
+                            <td><?= esc($field['nama']) ?></td>
+                            <td><?= esc(number_format($field['min'], 4)) ?></td>
+                            <td><?= esc(number_format($field['max'], 4)) ?></td>
+                            <td><?= esc(number_format($field['value'], 4)) ?></td>
+                            <td><span class="badge"><?= esc(number_format($field['normalized'], 4)) ?></span></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php else: ?>
+        <div class="empty-state compact-empty">
+            <p>Data normalisasi belum tersedia.</p>
+        </div>
+    <?php endif; ?>
+</section>
+
+<section class="card-section">
+    <h3 class="section-title">Confusion Matrik (LOOCV - K=<?= esc((string) ($hasil['nilai_k'] ?? 3)) ?>)</h3>
+    <p style="color:#4b5563; margin-bottom:12px; font-size:13px;">Evaluasi model KNN menggunakan Leave-One-Out Cross-Validation pada data latih.</p>
+    <?php if (!empty($confusionMatrix['matrix'])): ?>
+        <div class="table-wrapper">
+            <table class="data-table" style="min-width:500px;">
+                <thead>
+                    <tr>
+                        <th>Actual \ Predicted</th>
+                        <?php foreach ($confusionMatrix['labels'] as $label): ?>
+                            <th style="text-align:center;"><?= esc($label) ?></th>
+                        <?php endforeach; ?>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($confusionMatrix['labels'] as $actual): ?>
+                        <tr>
+                            <td><strong><?= esc($actual) ?></strong></td>
+                            <?php foreach ($confusionMatrix['labels'] as $predicted): ?>
+                                <?php $val = $confusionMatrix['matrix'][$actual][$predicted] ?? 0; ?>
+                                <td style="text-align:center; <?= $actual === $predicted && $val > 0 ? 'background-color:#e8f0de;font-weight:600;' : '' ?>">
+                                    <?= esc((string) $val) ?>
+                                </td>
+                            <?php endforeach; ?>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <div style="margin-top:20px;">
+            <h3 class="section-title">Metrik Evaluasi</h3>
+            <div class="result-cards" style="margin-top:12px;">
+                <div class="result-card">
+                    <span class="result-label">Accuracy</span>
+                    <span class="result-value"><?= esc(number_format($confusionMatrix['accuracy'], 2)) ?>%</span>
+                </div>
+                <?php foreach ($confusionMatrix['labels'] as $label): ?>
+                    <?php if (array_sum($confusionMatrix['matrix'][$label]) > 0): ?>
+                        <div class="result-card">
+                            <span class="result-label">Precision <?= esc($label) ?></span>
+                            <span class="result-value"><?= esc(number_format(($confusionMatrix['precision'][$label] ?? 0) * 100, 2)) ?>%</span>
+                        </div>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </div>
+            <div class="result-cards" style="margin-top:12px;">
+                <?php foreach ($confusionMatrix['labels'] as $label): ?>
+                    <?php if (array_sum($confusionMatrix['matrix'][$label]) > 0): ?>
+                        <div class="result-card">
+                            <span class="result-label">Recall <?= esc($label) ?></span>
+                            <span class="result-value"><?= esc(number_format(($confusionMatrix['recall'][$label] ?? 0) * 100, 2)) ?>%</span>
+                        </div>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </div>
+            <div class="result-cards" style="margin-top:12px;">
+                <?php foreach ($confusionMatrix['labels'] as $label): ?>
+                    <?php if (array_sum($confusionMatrix['matrix'][$label]) > 0): ?>
+                        <div class="result-card">
+                            <span class="result-label">F1-Score <?= esc($label) ?></span>
+                            <span class="result-value"><?= esc(number_format(($confusionMatrix['f1'][$label] ?? 0) * 100, 2)) ?>%</span>
+                        </div>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    <?php else: ?>
+        <div class="empty-state compact-empty">
+            <p>Confusion matrix belum tersedia.</p>
+        </div>
+    <?php endif; ?>
+</section>
+
 <?= $this->endSection() ?>
 
 <?= $this->section('scripts') ?>

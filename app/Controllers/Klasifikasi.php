@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Libraries\CommodityCatalog;
 use App\Libraries\GeoPolygon;
+use App\Libraries\EvaluationMetrics;
 use App\Libraries\KnnClassifier;
 use App\Libraries\SoilTypeCatalog;
 use App\Models\DataLatihModel;
@@ -28,6 +29,7 @@ class Klasifikasi extends BaseController
     private CommodityCatalog $commodityCatalog;
     private KnnClassifier $classifier;
     private GeoPolygon $geoPolygon;
+    private EvaluationMetrics $metrics;
 
     public function __construct()
     {
@@ -38,6 +40,7 @@ class Klasifikasi extends BaseController
         $this->commodityCatalog = new CommodityCatalog();
         $this->classifier = new KnnClassifier();
         $this->geoPolygon = new GeoPolygon();
+        $this->metrics = new EvaluationMetrics();
     }
 
     public function index()
@@ -192,13 +195,24 @@ class Klasifikasi extends BaseController
             ];
         }
 
+        $trainingData = $this->dataLatihModel
+            ->select('data_latih.*, data_latih_label.kelas')
+            ->join('data_latih_label', 'data_latih_label.data_latih_id = data_latih.id')
+            ->orderBy('data_latih.id', 'ASC')
+            ->findAll();
+
+        $normalization = $this->metrics->computeNormalization($dataUji, $trainingData);
+        $confusionMatrix = $this->metrics->computeConfusionMatrix($trainingData, (int) ($hasil['nilai_k'] ?? 3));
+
         return view('component/klasifikasi/result', [
-            'title'           => 'Hasil Klasifikasi',
-            'hasil'           => $hasil,
-            'dataUji'         => $dataUji,
-            'targetCommodity' => $targetCommodity,
-            'detailRows'      => $detailRows,
-            'mapColor'        => $mapColor,
+            'title'             => 'Hasil Klasifikasi',
+            'hasil'             => $hasil,
+            'dataUji'           => $dataUji,
+            'targetCommodity'   => $targetCommodity,
+            'detailRows'        => $detailRows,
+            'mapColor'          => $mapColor,
+            'normalization'     => $normalization,
+            'confusionMatrix'   => $confusionMatrix,
         ]);
     }
 
