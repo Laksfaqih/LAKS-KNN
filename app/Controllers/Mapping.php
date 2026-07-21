@@ -36,21 +36,17 @@ class Mapping extends BaseController
         }
 
         $commodityMap = $this->commodityCatalog->idMap(false);
-        $activeCommodities = $this->commodityCatalog->active();
         foreach ($headers as &$row) {
             $recommended = $commodityMap[(int) ($row['komoditas_rekomendasi_id'] ?? 0)] ?? null;
             $row['rekomendasi_warna'] = $recommended['warna_peta'] ?? '#64748b';
             $detailMap = $detailsByHeader[(int) $row['id']] ?? [];
             $row['hasil_detail'] = [];
 
-            foreach ($activeCommodities as $commodity) {
-                $nameKey = strtolower((string) $commodity['nama']);
-                $row['hasil_detail'][] = $detailMap[$nameKey] ?? [
-                    'hasil_klasifikasi_id' => (int) $row['id'],
-                    'kelas'                => $this->randomDummyClass((int) $row['id'], (int) $commodity['id'], (string) $row['rekomendasi_komoditas']),
-                    'nama'                 => $commodity['nama'],
-                    'warna_peta'           => $commodity['warna_peta'],
-                ];
+            if ($recommended !== null) {
+                $nameKey = strtolower((string) $recommended['nama']);
+                if (isset($detailMap[$nameKey])) {
+                    $row['hasil_detail'][] = $detailMap[$nameKey];
+                }
             }
         }
 
@@ -59,13 +55,5 @@ class Mapping extends BaseController
             'mapPolygons' => $headers,
             'legendItems' => $this->commodityCatalog->active(),
         ]);
-    }
-
-    private function randomDummyClass(int $hasilId, int $commodityId, string $seedLabel): string
-    {
-        $classes = ['S1', 'S2', 'S3', 'N'];
-        $seed = abs(crc32($hasilId . ':' . $commodityId . ':' . $seedLabel));
-
-        return $classes[$seed % count($classes)];
     }
 }

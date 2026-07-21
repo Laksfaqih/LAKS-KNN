@@ -102,9 +102,10 @@ class Klasifikasi extends BaseController
             return redirect()->to('/klasifikasi')->withInput()->with('error', 'Tanaman yang dipilih tidak ditemukan.');
         }
 
-        $trainingData = $this->trainingData();
+        $komoditasId = (int) $commodity['id'];
+        $trainingData = $this->trainingData($komoditasId);
         if ($trainingData === []) {
-            return redirect()->to('/klasifikasi')->withInput()->with('error', 'Data latih aktif belum tersedia.');
+            return redirect()->to('/klasifikasi')->withInput()->with('error', 'Data latih aktif belum tersedia untuk tanaman ini.');
         }
 
         try {
@@ -171,33 +172,25 @@ class Klasifikasi extends BaseController
             $mapColor = (string) ($targetCommodity['warna_peta'] ?? $mapColor);
         }
 
-        $detailRows = $this->db->table('hasil_klasifikasi_detail hd')
-            ->select('hd.kelas, hd.komoditas_id, k.nama')
-            ->join('komoditas k', 'k.id = hd.komoditas_id')
-            ->where('hd.hasil_klasifikasi_id', $hasilId)
-            ->orderBy('k.urutan_tampil', 'ASC')
-            ->orderBy('k.id', 'ASC')
-            ->get()
-            ->getResultArray();
-
-        $detailMap = [];
-        foreach ($detailRows as $detailRow) {
-            $detailMap[(int) $detailRow['komoditas_id']] = $detailRow;
-        }
-
         $detailRows = [];
-        foreach ($this->commodityCatalog->active() as $commodityRow) {
-            $commodityId = (int) $commodityRow['id'];
-            $detailRows[] = $detailMap[$commodityId] ?? [
-                'komoditas_id' => $commodityId,
-                'nama'         => $commodityRow['nama'],
-                'kelas'        => $this->randomDummyClass($hasilId, $commodityId, (string) ($hasil['rekomendasi_komoditas'] ?? '')),
+        if ($targetCommodity !== null) {
+            $existingDetail = $this->db->table('hasil_klasifikasi_detail')
+                ->where('hasil_klasifikasi_id', $hasilId)
+                ->where('komoditas_id', (int) $targetCommodity['id'])
+                ->get()
+                ->getRowArray();
+
+            $detailRows[] = [
+                'komoditas_id' => (int) $targetCommodity['id'],
+                'nama'         => $targetCommodity['nama'],
+                'kelas'        => $existingDetail['kelas'] ?? ($hasil['kelas_hasil'] ?? '-'),
             ];
         }
 
         $trainingData = $this->dataLatihModel
             ->select('data_latih.*, data_latih_label.kelas')
             ->join('data_latih_label', 'data_latih_label.data_latih_id = data_latih.id')
+            ->where('data_latih.komoditas_id', (int) $hasil['komoditas_target_id'])
             ->orderBy('data_latih.id', 'ASC')
             ->findAll();
 
@@ -218,27 +211,13 @@ class Klasifikasi extends BaseController
 
     private function buildDetailRows(int $hasilId, int $targetCommodityId, string $predictedClass): array
     {
-        $rows = [];
-        foreach ($this->commodityCatalog->active() as $commodity) {
-            $commodityId = (int) $commodity['id'];
-            $rows[] = [
+        return [
+            [
                 'hasil_klasifikasi_id' => $hasilId,
-                'komoditas_id'         => $commodityId,
-                'kelas'                => $commodityId === $targetCommodityId
-                    ? $predictedClass
-                    : $this->randomDummyClass($hasilId, $commodityId, $predictedClass),
-            ];
-        }
-
-        return $rows;
-    }
-
-    private function randomDummyClass(int $hasilId, int $commodityId, string $predictedClass): string
-    {
-        $classes = ['S1', 'S2', 'S3', 'N'];
-        $seed = abs(crc32($hasilId . ':' . $commodityId . ':' . $predictedClass));
-
-        return $classes[$seed % count($classes)];
+                'komoditas_id'         => $targetCommodityId,
+                'kelas'                => $predictedClass,
+            ],
+        ];
     }
 
     private function payload(): array
@@ -342,11 +321,12 @@ class Klasifikasi extends BaseController
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function trainingData(): array
+    private function trainingData(int $komoditasId): array
     {
         return $this->dataLatihModel
             ->select('data_latih.*, data_latih_label.kelas')
             ->join('data_latih_label', 'data_latih_label.data_latih_id = data_latih.id')
+            ->where('data_latih.komoditas_id', $komoditasId)
             ->orderBy('data_latih.id', 'ASC')
             ->findAll();
     }

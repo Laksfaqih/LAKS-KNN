@@ -67,9 +67,7 @@
                         <th>Nama Lahan</th>
                         <th>Rekomendasi</th>
                         <th>K</th>
-                        <?php foreach ($komoditas as $commodity): ?>
-                            <th><?= esc($commodity['nama']) ?></th>
-                        <?php endforeach; ?>
+                        <th>Kelas</th>
                         <th>Aksi</th>
                     </tr>
                 </thead>
@@ -80,9 +78,13 @@
                             <td><?= esc($row['nama_lahan'] ?: 'Tanpa nama') ?></td>
                             <td><span class="badge"><?= esc($row['rekomendasi_komoditas']) ?></span></td>
                             <td><?= esc((string) $row['nilai_k']) ?></td>
-                            <?php foreach ($komoditas as $commodity): ?>
-                                <td><span class="badge"><?= esc($row['hasil_detail'][(int) $commodity['id']] ?? '-') ?></span></td>
-                            <?php endforeach; ?>
+                            <?php
+                            $targetKelas = '-';
+                            if ($row['komoditas_rekomendasi_id'] ?? null) {
+                                $targetKelas = $row['hasil_detail'][(int) $row['komoditas_rekomendasi_id']] ?? '-';
+                            }
+                            ?>
+                            <td><span class="badge"><?= esc($targetKelas) ?></span></td>
                             <td><a class="link-edit" href="<?= site_url('klasifikasi/hasil/' . $row['id']) ?>">Detail</a></td>
                         </tr>
                     <?php endforeach; ?>

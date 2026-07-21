@@ -27,7 +27,7 @@ class Dashboard extends BaseController
             ->getResultArray();
 
         $historyRows = $this->db->table('hasil_klasifikasi hk')
-            ->select('hk.id, hk.nilai_k, hk.rekomendasi_komoditas, du.nama_lahan, du.created_at AS tanggal_input')
+            ->select('hk.id, hk.nilai_k, hk.rekomendasi_komoditas, hk.komoditas_rekomendasi_id, du.nama_lahan, du.created_at AS tanggal_input')
             ->join('data_uji du', 'du.id = hk.data_uji_id')
             ->orderBy('hk.id', 'DESC')
             ->limit(20)
@@ -47,13 +47,6 @@ class Dashboard extends BaseController
 
         foreach ($historyRows as &$row) {
             $detailMap = $detailByHeader[(int) $row['id']] ?? [];
-            foreach ($komoditas as $commodity) {
-                $commodityId = (int) $commodity['id'];
-                if (! isset($detailMap[$commodityId])) {
-                    $detailMap[$commodityId] = $this->randomDummyClass((int) $row['id'], $commodityId, (string) $row['rekomendasi_komoditas']);
-                }
-            }
-
             $row['hasil_detail'] = $detailMap;
         }
 
@@ -77,13 +70,5 @@ class Dashboard extends BaseController
             'komoditas'      => $komoditas,
             'miniMapItems'   => $miniMapItems,
         ]);
-    }
-
-    private function randomDummyClass(int $hasilId, int $commodityId, string $seedLabel): string
-    {
-        $classes = ['S1', 'S2', 'S3', 'N'];
-        $seed = abs(crc32($hasilId . ':' . $commodityId . ':' . $seedLabel));
-
-        return $classes[$seed % count($classes)];
     }
 }

@@ -13,7 +13,7 @@
 <section class="page-header">
     <div>
         <h2>Mapping</h2>
-        <p>Warna area mewakili rekomendasi KNN, popup menampilkan evaluasi kelas semua komoditas.</p>
+        <p>Warna area mewakili rekomendasi KNN, popup menampilkan hasil klasifikasi tanaman.</p>
     </div>
 </section>
 
@@ -59,9 +59,10 @@
             }).addTo(map);
 
             let details = '';
-            item.hasil_detail.forEach((detail) => {
-                details += `<p><strong>${detail.nama}:</strong> ${detail.kelas}</p>`;
-            });
+            if (item.hasil_detail.length > 0) {
+                const d = item.hasil_detail[0];
+                details = `<p><strong>${d.nama}:</strong> ${d.kelas}</p>`;
+            }
 
             layer.bindPopup(`
                 <div class="map-popup">
